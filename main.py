@@ -118,12 +118,13 @@ class App(tk.Tk):
             self.run_scan_loop()
 
     def create_test_window(self):
-        """Creates a small red window to act as a target for the bot."""
-        self.log("Creating a red target window at (100, 100).")
+        """Creates a small window with the currently selected target color."""
+        hex_color = self._bgr_to_hex(self.target_color_bgr)
+        self.log(f"Creating a target window at (100, 100) with color {hex_color}.")
         self.test_window = tk.Toplevel(self)
         self.test_window.title("Target")
         self.test_window.geometry("50x50+100+100") # 50x50 window at x=100, y=100
-        self.test_window.configure(bg="red")
+        self.test_window.configure(bg=hex_color)
         # Prevent user from closing it manually, only bot can
         self.test_window.protocol("WM_DELETE_WINDOW", lambda: None)
 
@@ -187,9 +188,7 @@ class App(tk.Tk):
         self.log(f"New color sampled: BGR={bgr_color}")
         self.target_color_bgr = bgr_color
 
-        # Convert BGR to hex for GUI
-        b, g, r = bgr_color
-        hex_color = f"#{r:02x}{g:02x}{b:02x}".upper()
+        hex_color = self._bgr_to_hex(bgr_color)
 
         # Update GUI
         self.color_preview.config(bg=hex_color)
@@ -213,6 +212,11 @@ class App(tk.Tk):
             # Update GUI
             self.color_preview.config(bg=hex_color)
             self.color_label.config(text=hex_color.upper())
+
+    def _bgr_to_hex(self, bgr_color):
+        """Converts a BGR color list to a hex string."""
+        b, g, r = bgr_color
+        return f"#{r:02x}{g:02x}{b:02x}".upper()
 
     def log(self, message):
         timestamp = time.strftime("%H:%M:%S")
