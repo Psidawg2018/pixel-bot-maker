@@ -4,3 +4,4 @@ opencv-python
 pytesseract
 pynput
 numpy
+pygetwindow

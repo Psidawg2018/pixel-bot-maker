@@ -7,6 +7,7 @@ import numpy as np
 import mss
 from pynput import keyboard
 import threading
+import pygetwindow as gw
 from screen_capture import capture_screen
 from image_analyzer import find_color, find_text
 from automation import click_at
@@ -29,25 +30,41 @@ class App(tk.Tk):
         self.running = False
         self.scan_job = None
         self.hotkey_listener = None
+        self.target_window_title = None
         # Set default scan region and color
-        self.scan_region = {'top': 0, 'left': 0, 'width': 500, 'height': 500}
         self.target_color_bgr = [0, 0, 255] # Default to Red
 
         # --- Configuration Frame ---
         config_frame = tk.Frame(self, bg=self.bg_color)
         config_frame.pack(pady=10, padx=10, fill="x", anchor="n")
 
-        # Area Selection
+        # Window Selection
+        window_frame = tk.Frame(config_frame, bg=self.bg_color)
+        window_frame.pack(fill="x", pady=(0, 5))
+        self.select_window_button = tk.Button(
+            window_frame, text="Select Window", command=self.open_window_selector,
+            bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT
+        )
+        self.select_window_button.pack(side="left", expand=True, padx=(0, 5))
+
+        self.window_label = tk.Label(
+            window_frame, text="Window: (None Selected)",
+            bg=self.bg_color, fg=self.text_color, wraplength=180, justify="left"
+        )
+        self.window_label.pack(side="left", expand=True, padx=(5, 0))
+
+        # Area Selection (now disabled)
         area_frame = tk.Frame(config_frame, bg=self.bg_color)
         area_frame.pack(fill="x")
         self.select_area_button = tk.Button(
             area_frame, text="Select Scan Area", command=self.open_area_selector,
-            bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT
+            bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT,
+            state=tk.DISABLED
         )
         self.select_area_button.pack(side="left", expand=True, padx=(0, 5))
 
         self.area_label = tk.Label(
-            area_frame, text=f"Area: {self.scan_region['width']}x{self.scan_region['height']}",
+            area_frame, text="Area: (Set by Window)",
             bg=self.bg_color, fg=self.text_color
         )
         self.area_label.pack(side="left", expand=True, padx=(5, 0))
@@ -131,14 +148,40 @@ class App(tk.Tk):
 
     def run_scan_loop(self):
         if not self.running:
-            # This can happen if the hotkey stops the bot
-            # right before a scheduled scan starts.
             return
 
-        self.log(f"Scanning region: {self.scan_region}")
+        if not self.target_window_title:
+            self.log("Error: No target window selected. Stopping bot.")
+            self.toggle_bot()
+            return
+
+        try:
+            target_windows = gw.getWindowsWithTitle(self.target_window_title)
+            if not target_windows:
+                self.log(f"Error: Window '{self.target_window_title}' not found. Stopping bot.")
+                self.toggle_bot()
+                return
+
+            # Use the first window found
+            target_window = target_windows[0]
+
+            # Get window geometry
+            scan_region = {
+                'top': target_window.top,
+                'left': target_window.left,
+                'width': target_window.width,
+                'height': target_window.height
+            }
+
+        except Exception as e:
+            self.log(f"Error getting window details: {e}. Stopping bot.")
+            self.toggle_bot()
+            return
+
+        self.log(f"Scanning window '{self.target_window_title}' at {scan_region}")
 
         # 1. Capture the screen area
-        image = capture_screen(self.scan_region)
+        image = capture_screen(scan_region)
 
         # 2. Analyze for the color
         locations = find_color(image, self.target_color_bgr)
@@ -148,8 +191,8 @@ class App(tk.Tk):
             self.log(f"SUCCESS: Found target color at {target_pos} (relative).")
 
             # Convert relative coordinates to absolute screen coordinates
-            abs_x = self.scan_region['left'] + target_pos[0]
-            abs_y = self.scan_region['top'] + target_pos[1]
+            abs_x = scan_region['left'] + target_pos[0]
+            abs_y = scan_region['top'] + target_pos[1]
 
             # 3. Perform the action
             self.log(f"Performing click at absolute position ({abs_x}, {abs_y}).")
@@ -178,6 +221,19 @@ class App(tk.Tk):
             text=f"Area: {region['width']}x{region['height']} at ({region['left']},{region['top']})"
         )
         # Show main window again
+        self.deiconify()
+
+    def open_window_selector(self):
+        self.log("Opening window selector...")
+        self.withdraw()
+        WindowSelector(self)
+
+    def on_window_selected(self, title):
+        self.log(f"Target window set to: {title}")
+        self.target_window_title = title
+        # Truncate title if too long for the label
+        display_title = (title[:25] + '...') if len(title) > 25 else title
+        self.window_label.config(text=f"Window: {display_title}")
         self.deiconify()
 
     def open_color_sampler(self):
@@ -244,6 +300,59 @@ class App(tk.Tk):
         timestamp = time.strftime("%H:%M:%S")
         self.log_area.insert(tk.END, f"[{timestamp}] {message}\n")
         self.log_area.see(tk.END)
+
+class WindowSelector(tk.Toplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.master = master
+        self.title("Select a Window")
+        self.geometry("400x400")
+        self.configure(bg=self.master.bg_color)
+
+        label = tk.Label(self, text="Select the target window:", bg=self.master.bg_color, fg=self.master.text_color)
+        label.pack(pady=10)
+
+        list_frame = tk.Frame(self)
+        list_frame.pack(pady=5, padx=10, fill="both", expand=True)
+
+        self.listbox = tk.Listbox(list_frame, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT)
+        self.listbox.pack(side="left", fill="both", expand=True)
+
+        scrollbar = tk.Scrollbar(list_frame, orient="vertical", command=self.listbox.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.listbox.config(yscrollcommand=scrollbar.set)
+
+        # Populate listbox
+        self.window_titles = [title for title in gw.getAllTitles() if title and title != self.master.title()]
+        for title in self.window_titles:
+            self.listbox.insert(tk.END, title)
+
+        button_frame = tk.Frame(self, bg=self.master.bg_color)
+        button_frame.pack(pady=10)
+
+        select_button = tk.Button(button_frame, text="Select", command=self.on_select, bg=self.master.button_color, fg=self.master.button_text_color, relief=tk.FLAT)
+        select_button.pack(side="left", padx=10)
+
+        cancel_button = tk.Button(button_frame, text="Cancel", command=self.on_cancel, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT)
+        cancel_button.pack(side="left", padx=10)
+
+        self.protocol("WM_DELETE_WINDOW", self.on_cancel)
+        self.transient(self.master)
+        self.grab_set()
+
+
+    def on_select(self):
+        selection_indices = self.listbox.curselection()
+        if not selection_indices:
+            return
+
+        selected_title = self.listbox.get(selection_indices[0])
+        self.destroy()
+        self.master.on_window_selected(selected_title)
+
+    def on_cancel(self):
+        self.destroy()
+        self.master.deiconify() # Show main window again
 
 class ColorSampler(tk.Toplevel):
     def __init__(self, master):
