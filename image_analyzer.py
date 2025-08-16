@@ -39,6 +39,37 @@ def find_text(image):
     text = pytesseract.image_to_string(gray_image)
     return text.strip()
 
+def find_image(haystack_img, needle_img, threshold=0.8):
+    """
+    Finds a smaller image (needle) within a larger image (haystack).
+
+    :param haystack_img: The larger image to search within.
+    :param needle_img: The smaller template image to find.
+    :param threshold: The confidence threshold for a match (0.0 to 1.0).
+    :return: A tuple (x, y) of the center of the found match, or None.
+    """
+    # Convert images to grayscale for template matching
+    haystack_gray = cv2.cvtColor(haystack_img, cv2.COLOR_BGR2GRAY)
+    needle_gray = cv2.cvtColor(needle_img, cv2.COLOR_BGR2GRAY)
+
+    # Get dimensions of the needle
+    needle_w, needle_h = needle_gray.shape[::-1]
+
+    # Perform template matching
+    res = cv2.matchTemplate(haystack_gray, needle_gray, cv2.TM_CCOEFF_NORMED)
+
+    # Find the best match
+    _, max_val, _, max_loc = cv2.minMaxLoc(res)
+
+    if max_val >= threshold:
+        # Calculate the center of the found region
+        center_x = max_loc[0] + needle_w // 2
+        center_y = max_loc[1] + needle_h // 2
+        return (center_x, center_y)
+
+    return None
+
+
 if __name__ == '__main__':
     print("Running image analyzer tests...")
 
@@ -92,3 +123,27 @@ if __name__ == '__main__':
         print("SUCCESS: Extracted text matches the original text.")
     else:
         print("FAILURE: Extracted text does not match.")
+
+    # --- Test 3: find_image ---
+    print("\n--- Testing find_image ---")
+    # Create a high-contrast haystack image
+    haystack = np.ones((300, 300, 3), np.uint8) * 255 # White background
+    # Create a smaller needle image
+    needle = np.zeros((50, 50, 3), np.uint8) # Black square
+
+    # Place the needle inside the haystack at a known location
+    needle_x, needle_y = 100, 150
+    haystack[needle_y:needle_y+50, needle_x:needle_x+50] = needle
+
+    print(f"Searching for a 50x50 black square inside a 300x300 white image.")
+    location = find_image(haystack.copy(), needle.copy(), threshold=0.95)
+
+    if location:
+        print(f"SUCCESS: Found image at {location}.")
+        expected_x, expected_y = needle_x + 25, needle_y + 25
+        if location == (expected_x, expected_y):
+            print("SUCCESS: Location is correct.")
+        else:
+            print(f"FAILURE: Location is incorrect. Expected ({expected_x}, {expected_y}).")
+    else:
+        print("FAILURE: Did not find the image.")
