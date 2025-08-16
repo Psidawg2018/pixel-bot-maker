@@ -14,7 +14,7 @@ import cv2
 from PIL import Image, ImageTk
 from screen_capture import capture_screen
 from image_analyzer import find_color, find_image
-from automation import click_at, type_text
+from automation import click_at, type_text, click_and_drag
 
 class App(tk.Tk):
     def __init__(self):
@@ -38,7 +38,8 @@ class App(tk.Tk):
         self.action_sequence = []
         self.current_step_index = 0
         self.hide_window_var = tk.BooleanVar(value=True)
-        self.target_window_title = None # A global default
+        self.target_window_title = tk.StringVar()
+        self.target_window_title.set("") # Set to empty string initially
 
         # Ensure templates directory exists
         if not os.path.exists("templates"):
@@ -60,7 +61,7 @@ class App(tk.Tk):
         self.sequence_listbox.bind("<<ListboxSelect>>", self.on_sequence_select)
         seq_button_frame = tk.Frame(list_container, bg=self.bg_color)
         seq_button_frame.pack(side="left", padx=(5,0))
-        self.add_step_button = tk.Button(seq_button_frame, text="Add", command=self.add_step, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT)
+        self.add_step_button = tk.Button(seq_button_frame, text="Add", command=self.add_step, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, state=tk.DISABLED)
         self.add_step_button.pack(pady=2, fill="x")
         self.edit_step_button = tk.Button(seq_button_frame, text="Edit", command=self.edit_step, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, state=tk.DISABLED)
         self.edit_step_button.pack(pady=2, fill="x")
@@ -68,17 +69,35 @@ class App(tk.Tk):
         self.remove_step_button.pack(pady=2, fill="x")
 
         # --- Final Controls ---
-        controls_frame = tk.Frame(self, bg=self.bg_color)
+        controls_frame = tk.LabelFrame(self, text="Global Target", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
         controls_frame.pack(pady=10, padx=10, fill="x")
 
-        self.hide_window_check = tk.Checkbutton(controls_frame, text="Hide window when bot is running", variable=self.hide_window_var, bg=self.bg_color, fg=self.text_color, selectcolor=self.widget_bg_color, activebackground=self.bg_color, activeforeground=self.text_color)
+        self.target_window_label = tk.Label(controls_frame, textvariable=self.target_window_title, bg=self.widget_bg_color, fg=self.text_color, wraplength=380, justify="left")
+        self.target_window_label.pack(pady=5, fill="x")
+        tk.Button(controls_frame, text="Change Target Window", command=self.prompt_for_window_selection, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT).pack(pady=(0,5))
+
+        bot_controls_frame = tk.Frame(self, bg=self.bg_color)
+        bot_controls_frame.pack(pady=10, padx=10, fill="x")
+
+        self.hide_window_check = tk.Checkbutton(bot_controls_frame, text="Hide window when bot is running", variable=self.hide_window_var, bg=self.bg_color, fg=self.text_color, selectcolor=self.widget_bg_color, activebackground=self.bg_color, activeforeground=self.text_color)
         self.hide_window_check.pack()
 
-        self.start_button = tk.Button(controls_frame, text="Start Bot", command=self.toggle_bot, bg=self.button_color, fg=self.button_text_color, activebackground="#2980B9", activeforeground=self.text_color, relief=tk.FLAT, padx=10, pady=5)
+        self.start_button = tk.Button(bot_controls_frame, text="Start Bot", command=self.toggle_bot, bg=self.button_color, fg=self.button_text_color, activebackground="#2980B9", activeforeground=self.text_color, relief=tk.FLAT, padx=10, pady=5)
         self.start_button.pack(pady=10)
         self.log_area.pack(pady=10, padx=10, fill="both", expand=True)
 
-        self.log("Welcome! Press 'Start Bot' to begin.")
+        self.log("Welcome! Please select a target window to begin.")
+        self.after(200, lambda: self.prompt_for_window_selection(is_splash=True))
+
+    def prompt_for_window_selection(self, is_splash=False):
+        self.log("Prompting for target window selection...")
+        WindowSelector(self, is_splash=is_splash)
+
+    def on_window_selected(self, title):
+        self.target_window_title.set(title)
+        if self.add_step_button['state'] == tk.DISABLED:
+            self.add_step_button.config(state=tk.NORMAL)
+        self.log(f"Global target window set to: {title}")
 
     def on_sequence_select(self, event):
         if self.sequence_listbox.curselection():
@@ -216,6 +235,13 @@ class App(tk.Tk):
                 text = action_params.get('text', '')
                 self.log(f"Performing action: Type '{text}'")
                 type_text(text)
+            elif action_type == "Click and Drag":
+                offset_x = action_params.get('drag_offset_x', 0)
+                offset_y = action_params.get('drag_offset_y', 0)
+                end_x = abs_x + offset_x
+                end_y = abs_y + offset_y
+                self.log(f"Performing action: Drag from ({abs_x}, {abs_y}) to ({end_x}, {end_y})")
+                click_and_drag(abs_x, abs_y, end_x, end_y)
 
             self.current_step_index += 1
             self.log("Action complete. Moving to next step in 1 second...")
@@ -244,13 +270,18 @@ class App(tk.Tk):
         return f"#{r:02x}{g:02x}{b:02x}".upper()
 
 class WindowSelector(tk.Toplevel):
-    def __init__(self, master):
+    def __init__(self, master, is_splash=False):
         super().__init__(master)
         self.master = master
-        self.title("Select a Window")
+        self.is_splash = is_splash
+        self.title("Select Target Window")
         self.geometry("350x450")
-        # Access App's theme from the grandparent master (App -> StepEditor -> self)
-        app = self.master.master
+
+        # Find the root App instance for theming
+        app = self.master
+        while not isinstance(app, App):
+            app = app.master
+
         self.configure(bg=app.bg_color)
         self.transient(master)
         self.grab_set()
@@ -263,9 +294,12 @@ class WindowSelector(tk.Toplevel):
 
         tk.Button(button_frame, text="Refresh", command=self.populate_windows, bg=app.widget_bg_color, fg=app.text_color, relief=tk.FLAT).pack(side="left", padx=5)
         tk.Button(button_frame, text="Select", command=self.on_select, bg=app.button_color, fg=app.button_text_color, relief=tk.FLAT).pack(side="left", padx=5)
-        tk.Button(button_frame, text="Cancel", command=self.destroy, bg=app.widget_bg_color, fg=app.text_color, relief=tk.FLAT).pack(side="left", padx=5)
+
+        cancel_text = "Quit" if self.is_splash and isinstance(self.master, App) else "Cancel"
+        tk.Button(button_frame, text=cancel_text, command=self.on_cancel, bg=app.widget_bg_color, fg=app.text_color, relief=tk.FLAT).pack(side="left", padx=5)
 
         self.populate_windows()
+        self.protocol("WM_DELETE_WINDOW", self.on_cancel)
 
     def populate_windows(self):
         self.listbox.delete(0, tk.END)
@@ -278,8 +312,16 @@ class WindowSelector(tk.Toplevel):
         if not selected_indices:
             return
         selected_title = self.listbox.get(selected_indices[0])
-        self.master.on_window_selected(selected_title)
+        if hasattr(self.master, 'on_window_selected'):
+            self.master.on_window_selected(selected_title)
         self.destroy()
+
+    def on_cancel(self):
+        # If this is the initial selection dialog and no selection has been made, closing it quits the app.
+        if self.is_splash and isinstance(self.master, App) and not self.master.target_window_title.get():
+            self.master.destroy()
+        else:
+            self.destroy()
 
 
 class ScreenshotTaker(tk.Toplevel):
@@ -420,7 +462,9 @@ class StepEditor(tk.Toplevel):
         self.detection_mode = tk.StringVar(value=self.step_data.get('detection_mode', 'Image'))
         self.action_type = tk.StringVar(value=self.step_data.get('action_type', 'Click'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
-        self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title or ''))
+        self.drag_offset_x = tk.StringVar(value=self.step_data.get('action_params', {}).get('drag_offset_x', '0'))
+        self.drag_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('drag_offset_y', '0'))
+        self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title.get() or ''))
         self.target_color_bgr = self.step_data.get('detection_target', [0,0,255])
         self.template_var = tk.StringVar(value=os.path.basename(self.step_data.get('detection_target', '')) if self.step_data.get('detection_mode') == 'Image' else '')
 
@@ -452,8 +496,23 @@ class StepEditor(tk.Toplevel):
         action_frame = tk.LabelFrame(self, text="3. Choose Action", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         action_frame.pack(pady=10, padx=10, fill="x")
         tk.Radiobutton(action_frame, text="Click", variable=self.action_type, value="Click", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Click and Drag", variable=self.action_type, value="Click and Drag", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Type", variable=self.action_type, value="Type", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
-        self.type_entry = tk.Entry(action_frame, textvariable=self.text_to_type, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT)
+
+        # --- Action Parameter Frames ---
+        self.type_entry_frame = tk.Frame(action_frame, bg=self.master.bg_color)
+        self.type_entry = tk.Entry(self.type_entry_frame, textvariable=self.text_to_type, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT)
+        self.type_entry.pack(fill="x", padx=5, pady=5)
+
+        self.drag_frame = tk.Frame(action_frame, bg=self.master.bg_color)
+        drag_x_frame = tk.Frame(self.drag_frame, bg=self.master.bg_color)
+        tk.Label(drag_x_frame, text="X Offset:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(drag_x_frame, textvariable=self.drag_offset_x, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+        drag_x_frame.pack(fill="x", pady=2)
+        drag_y_frame = tk.Frame(self.drag_frame, bg=self.master.bg_color)
+        tk.Label(drag_y_frame, text="Y Offset:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(drag_y_frame, textvariable=self.drag_offset_y, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+        drag_y_frame.pack(fill="x", pady=2)
 
         button_frame = tk.Frame(self, bg=self.master.bg_color)
         button_frame.pack(pady=20)
@@ -472,10 +531,16 @@ class StepEditor(tk.Toplevel):
             self.image_frame.pack(pady=10, padx=10, fill="x")
 
     def on_action_change(self):
-        if self.action_type.get() == "Type":
-            self.type_entry.pack(fill="x", padx=5, pady=5)
-        else:
-            self.type_entry.pack_forget()
+        action = self.action_type.get()
+        if action == "Type":
+            self.drag_frame.pack_forget()
+            self.type_entry_frame.pack(fill="x", padx=5, pady=2)
+        elif action == "Click and Drag":
+            self.type_entry_frame.pack_forget()
+            self.drag_frame.pack(fill="x", padx=5, pady=2)
+        else: # Click
+            self.type_entry_frame.pack_forget()
+            self.drag_frame.pack_forget()
 
     def on_save(self):
         step = {
@@ -486,8 +551,17 @@ class StepEditor(tk.Toplevel):
             "detection_target": None,
             "detection_target_name": ""
         }
-        if step['action_type'] == 'Type':
+
+        action_type = step['action_type']
+        if action_type == 'Type':
             step['action_params']['text'] = self.text_to_type.get()
+        elif action_type == 'Click and Drag':
+            try:
+                step['action_params']['drag_offset_x'] = int(self.drag_offset_x.get())
+                step['action_params']['drag_offset_y'] = int(self.drag_offset_y.get())
+            except ValueError:
+                self.master.log("Error: Drag offsets must be integers.")
+                return
 
         if step['detection_mode'] == 'Color':
             step['detection_target'] = self.target_color_bgr
@@ -504,7 +578,7 @@ class StepEditor(tk.Toplevel):
         self.destroy()
 
     def select_window(self):
-        WindowSelector(self)
+        WindowSelector(self, is_splash=False)
 
     def on_window_selected(self, title):
         self.target_window_title.set(title)
