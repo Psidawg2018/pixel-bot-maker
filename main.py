@@ -14,7 +14,7 @@ import cv2
 from PIL import Image, ImageTk
 from screen_capture import capture_screen
 from image_analyzer import find_color, find_image
-from automation import click_at, type_text
+from automation import click_at, type_text, click_and_drag
 
 class App(tk.Tk):
     def __init__(self):
@@ -349,6 +349,15 @@ class App(tk.Tk):
                 self.log(f"Fallback action: Clicking at ({abs_x}, {abs_y})")
                 click_at(abs_x, abs_y)
                 return True
+            elif action_details['action_type'] == "Click and Drag":
+                params = action_details.get('action_params', {})
+                offset_x = params.get('drag_offset_x', 0)
+                offset_y = params.get('drag_offset_y', 0)
+                end_x = abs_x + offset_x
+                end_y = abs_y + offset_y
+                self.log(f"Fallback action: Drag from ({abs_x}, {abs_y}) to ({end_x}, {end_y})")
+                click_and_drag(abs_x, abs_y, end_x, end_y)
+                return True
 
         self.log("Fallback target not found.")
         return False
@@ -577,6 +586,8 @@ class StepEditor(tk.Toplevel):
         self.primary_template_var = tk.StringVar(value=self.step_data.get('primary_target', {}).get('detection_target_name', ''))
         self.fallback_template_var = tk.StringVar(value=self.step_data.get('on_fail', {}).get('detection_target_name', ''))
         self.fallback_action_type = tk.StringVar(value=self.step_data.get('on_fail', {}).get('action_type', 'Click'))
+        self.fallback_drag_offset_x = tk.StringVar(value=self.step_data.get('on_fail', {}).get('action_params', {}).get('drag_offset_x', '0'))
+        self.fallback_drag_offset_y = tk.StringVar(value=self.step_data.get('on_fail', {}).get('action_params', {}).get('drag_offset_y', '0'))
         self._active_screenshot_target = None # Used to route screenshot callback
 
         # --- WIDGETS ---
@@ -608,6 +619,40 @@ class StepEditor(tk.Toplevel):
     def build_simple_action_ui(self, parent_frame):
         # This function builds the UI for a simple action, parented to the given frame.
         window_frame = tk.LabelFrame(parent_frame, text="1. Select Target Window", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        window_frame.pack(pady=10, padx=10, fill="x")
+        self.window_label = tk.Label(window_frame, textvariable=self.target_window_title, bg=self.master.widget_bg_color, fg=self.master.text_color, wraplength=250)
+        self.window_label.pack(side="left", fill="x", expand=True, padx=5)
+        tk.Button(window_frame, text="Select...", command=self.select_window, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left")
+        if not self.target_window_title.get(): self.target_window_title.set("(None Selected)")
+
+        mode_frame = tk.LabelFrame(parent_frame, text="2. Choose What to Look For", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        mode_frame.pack(pady=10, padx=10, fill="x")
+        tk.Radiobutton(mode_frame, text="Color", variable=self.detection_mode, value="Color", command=self.on_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(mode_frame, text="Image", variable=self.detection_mode, value="Image", command=self.on_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
+
+        self.color_frame = tk.Frame(parent_frame, bg=self.master.bg_color)
+        self.image_frame = tk.Frame(parent_frame, bg=self.master.bg_color)
+
+        tk.Button(self.color_frame, text="Sample Color", command=self.sample_color, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack()
+        self.color_preview = tk.Frame(self.color_frame, bg=self.master._bgr_to_hex(self.target_color_bgr), width=25, height=25, relief=tk.SUNKEN, borderwidth=1)
+        self.color_preview.pack(pady=5)
+
+        tk.Button(self.image_frame, text="Take Screenshot", command=self.take_screenshot, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack()
+        self.template_dropdown = tk.OptionMenu(self.image_frame, self.template_var, "")
+        self.template_dropdown.pack(pady=5)
+        self.update_template_list()
+
+        action_frame = tk.LabelFrame(parent_frame, text="3. Choose Action", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        action_frame.pack(pady=10, padx=10, fill="x")
+        tk.Radiobutton(action_frame, text="Click", variable=self.action_type, value="Click", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Type", variable=self.action_type, value="Type", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
+
+        self.type_entry_frame = tk.Frame(action_frame, bg=self.master.bg_color)
+        self.type_entry = tk.Entry(self.type_entry_frame, textvariable=self.text_to_type, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT)
+        self.type_entry.pack(fill="x", padx=5, pady=5)
+
+        self.on_mode_change()
+        self.on_action_change()
 
     def build_conditional_loop_ui(self, parent_frame):
         # --- Loop Settings ---
@@ -625,13 +670,30 @@ class StepEditor(tk.Toplevel):
         fallback_action_frame = tk.LabelFrame(parent_frame, text="Fallback Action (If primary target not found)", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         fallback_action_frame.pack(pady=5, padx=10, fill="x")
 
-        tk.Label(fallback_action_frame, text="Action:", bg=self.master.bg_color, fg=self.master.text_color).pack(pady=2, anchor="w", padx=5)
-        tk.Radiobutton(fallback_action_frame, text="Click", variable=self.fallback_action_type, value="Click", bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w", padx=15)
+        # --- Fallback Action Type ---
+        fallback_action_type_frame = tk.Frame(fallback_action_frame, bg=self.master.bg_color)
+        tk.Label(fallback_action_type_frame, text="Action:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", pady=2, padx=5)
+        tk.Radiobutton(fallback_action_type_frame, text="Click", variable=self.fallback_action_type, value="Click", command=self.on_fallback_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
+        tk.Radiobutton(fallback_action_type_frame, text="Click and Drag", variable=self.fallback_action_type, value="Click and Drag", command=self.on_fallback_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
+        fallback_action_type_frame.pack(fill="x")
 
+        # --- Fallback Action Params ---
+        self.fallback_drag_frame = tk.Frame(fallback_action_frame, bg=self.master.bg_color)
+        drag_x_frame = tk.Frame(self.fallback_drag_frame, bg=self.master.bg_color)
+        tk.Label(drag_x_frame, text="X Offset:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(drag_x_frame, textvariable=self.fallback_drag_offset_x, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+        drag_x_frame.pack(fill="x", pady=2)
+        drag_y_frame = tk.Frame(self.fallback_drag_frame, bg=self.master.bg_color)
+        tk.Label(drag_y_frame, text="Y Offset:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(drag_y_frame, textvariable=self.fallback_drag_offset_y, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+        drag_y_frame.pack(fill="x", pady=2)
+
+        # --- Fallback Target ---
         tk.Label(fallback_action_frame, text="Target for Fallback Action:", bg=self.master.bg_color, fg=self.master.text_color).pack(pady=2, anchor="w", padx=5)
         self.fallback_template_dropdown = self._build_image_selection_ui(fallback_action_frame, self.fallback_template_var, "fallback")
 
         self.update_conditional_template_lists()
+        self.on_fallback_action_change()
 
     def _build_image_selection_ui(self, parent, template_var, target_key):
         frame = tk.Frame(parent, bg=self.master.bg_color)
@@ -668,11 +730,6 @@ class StepEditor(tk.Toplevel):
             menu2.add_command(label=t, command=lambda v=t: self.fallback_template_var.set(v))
         if self.fallback_template_var.get() not in templates:
             self.fallback_template_var.set(templates[0])
-        window_frame.pack(pady=10, padx=10, fill="x")
-        self.window_label = tk.Label(window_frame, textvariable=self.target_window_title, bg=self.master.widget_bg_color, fg=self.master.text_color, wraplength=250)
-        self.window_label.pack(side="left", fill="x", expand=True, padx=5)
-        tk.Button(window_frame, text="Select...", command=self.select_window, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left")
-        if not self.target_window_title.get(): self.target_window_title.set("(None Selected)")
 
         mode_frame = tk.LabelFrame(parent_frame, text="2. Choose What to Look For", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         mode_frame.pack(pady=10, padx=10, fill="x")
@@ -727,6 +784,12 @@ class StepEditor(tk.Toplevel):
         else: # Click
             self.type_entry_frame.pack_forget()
 
+    def on_fallback_action_change(self):
+        if self.fallback_action_type.get() == "Click and Drag":
+            self.fallback_drag_frame.pack(fill="x", padx=15, pady=2)
+        else:
+            self.fallback_drag_frame.pack_forget()
+
     def on_save(self):
         step_type = self.step_type.get()
 
@@ -772,6 +835,15 @@ class StepEditor(tk.Toplevel):
                 self.master.log("Error: Max retries must be an integer.")
                 return
 
+            on_fail_params = {}
+            if self.fallback_action_type.get() == "Click and Drag":
+                try:
+                    on_fail_params['drag_offset_x'] = int(self.fallback_drag_offset_x.get())
+                    on_fail_params['drag_offset_y'] = int(self.fallback_drag_offset_y.get())
+                except ValueError:
+                    self.master.log("Error: Fallback drag offsets must be integers.")
+                    return
+
             step = {
                 "step_type": "conditional_loop",
                 "window_title": self.target_window_title.get(),
@@ -786,6 +858,7 @@ class StepEditor(tk.Toplevel):
                     "detection_mode": "Image",
                     "detection_target": os.path.join("templates", fallback_target_name),
                     "detection_target_name": fallback_target_name,
+                    "action_params": on_fail_params
                 }
             }
 

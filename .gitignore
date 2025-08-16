@@ -88,3 +88,7 @@ capture_test.png
 text_test_image.png
 run.log
 app.log
+
+# Application-specific ignores
+# Ignore user-generated templates but keep the directory
+templates/*.png

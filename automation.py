@@ -27,6 +27,44 @@ def type_text(text):
     print(f"Typed text: '{text}'")
 
 
+def click_and_drag(start_x, start_y, end_x, end_y, duration=0.5):
+    """
+    Simulates a click and drag from a start point to an end point.
+
+    :param start_x: The starting x-coordinate.
+    :param start_y: The starting y-coordinate.
+    :param end_x: The ending x-coordinate.
+    :param end_y: The ending y-coordinate.
+    :param duration: The time in seconds the drag should take.
+    """
+    mouse = MouseController()
+
+    # Move to the start position and press the button
+    mouse.position = (start_x, start_y)
+    time.sleep(0.1)
+    mouse.press(Button.left)
+    time.sleep(0.1)
+
+    # Interpolate the drag path
+    num_steps = int(duration / 0.01)
+    if num_steps < 1:
+        num_steps = 1
+
+    dx = (end_x - start_x) / num_steps
+    dy = (end_y - start_y) / num_steps
+
+    for i in range(num_steps):
+        new_x = start_x + (dx * (i + 1))
+        new_y = start_y + (dy * (i + 1))
+        mouse.position = (int(new_x), int(new_y))
+        time.sleep(0.01)
+
+    # Ensure the final position is set and release the button
+    mouse.position = (end_x, end_y)
+    time.sleep(0.1)
+    mouse.release(Button.left)
+    print(f"Dragged from ({start_x}, {start_y}) to ({end_x}, {end_y})")
+
 if __name__ == '__main__':
     print("Running automation tests...")
     print("This test will simulate a click and typing in 3 seconds.")
