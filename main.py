@@ -209,10 +209,7 @@ class App(tk.Tk):
 
     def open_area_selector(self):
         self.log("Opening area selector...")
-        # Hide main window
-        self.withdraw()
-        # Give a moment for window to hide
-        self.after(100, lambda: AreaSelector(self))
+        AreaSelector(self)
 
     def on_area_selected(self, region):
         self.log(f"New scan area selected: {region}")
@@ -220,12 +217,9 @@ class App(tk.Tk):
         self.area_label.config(
             text=f"Area: {region['width']}x{region['height']} at ({region['left']},{region['top']})"
         )
-        # Show main window again
-        self.deiconify()
 
     def open_window_selector(self):
         self.log("Opening window selector...")
-        self.withdraw()
         WindowSelector(self)
 
     def on_window_selected(self, title):
@@ -234,14 +228,10 @@ class App(tk.Tk):
         # Truncate title if too long for the label
         display_title = (title[:25] + '...') if len(title) > 25 else title
         self.window_label.config(text=f"Window: {display_title}")
-        self.deiconify()
 
     def open_color_sampler(self):
         self.log("Opening color sampler...")
-        # Hide main window
-        self.withdraw()
-        # Give a moment for window to hide
-        self.after(100, lambda: ColorSampler(self))
+        ColorSampler(self)
 
     def on_color_sampled(self, bgr_color):
         self.log(f"New color sampled: BGR={bgr_color}")
@@ -252,9 +242,6 @@ class App(tk.Tk):
         # Update GUI
         self.color_preview.config(bg=hex_color)
         self.color_label.config(text=hex_color)
-
-        # Show main window again
-        self.deiconify()
 
     def open_color_picker(self):
         # The askcolor function returns a tuple: ((R, G, B), '#RRGGBB')
@@ -352,7 +339,6 @@ class WindowSelector(tk.Toplevel):
 
     def on_cancel(self):
         self.destroy()
-        self.master.deiconify() # Show main window again
 
 class ColorSampler(tk.Toplevel):
     def __init__(self, master):
