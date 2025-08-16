@@ -1,0 +1,6 @@
+pillow
+mss
+opencv-python
+pytesseract
+pynput
+numpy

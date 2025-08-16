@@ -3,6 +3,8 @@ from tkinter import scrolledtext, colorchooser
 import time
 
 # Import our custom modules
+import numpy as np
+import mss
 from screen_capture import capture_screen
 from image_analyzer import find_color, find_text
 from automation import click_at
@@ -51,19 +53,32 @@ class App(tk.Tk):
         # Color Selection
         color_frame = tk.Frame(config_frame, bg=self.bg_color)
         color_frame.pack(fill="x", pady=10)
-        self.select_color_button = tk.Button(
-            color_frame, text="Select Target Color", command=self.open_color_picker,
+
+        color_buttons_frame = tk.Frame(color_frame, bg=self.bg_color)
+        color_buttons_frame.pack(side="left", expand=True, fill="x")
+
+        self.sample_color_button = tk.Button(
+            color_buttons_frame, text="Sample Color", command=self.open_color_sampler,
             bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT
         )
-        self.select_color_button.pack(side="left", expand=True, padx=(0, 5))
+        self.sample_color_button.pack(fill="x", pady=(0, 5))
 
-        self.color_preview = tk.Frame(color_frame, bg="#FF0000", width=20, height=20, relief=tk.SUNKEN, borderwidth=1)
-        self.color_preview.pack(side="left", padx=5)
-        self.color_label = tk.Label(
-            color_frame, text="#FF0000",
-            bg=self.bg_color, fg=self.text_color, width=15
+        self.select_color_button = tk.Button(
+            color_buttons_frame, text="Select from Palette", command=self.open_color_picker,
+            bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT
         )
-        self.color_label.pack(side="left", expand=True, padx=(5, 0))
+        self.select_color_button.pack(fill="x")
+
+        color_display_frame = tk.Frame(color_frame, bg=self.bg_color)
+        color_display_frame.pack(side="left", expand=True, padx=(10, 0))
+
+        self.color_preview = tk.Frame(color_display_frame, bg="#FF0000", width=25, height=25, relief=tk.SUNKEN, borderwidth=1)
+        self.color_preview.pack()
+        self.color_label = tk.Label(
+            color_display_frame, text="#FF0000",
+            bg=self.bg_color, fg=self.text_color
+        )
+        self.color_label.pack(pady=5)
 
 
         self.start_button = tk.Button(
@@ -161,6 +176,28 @@ class App(tk.Tk):
         # Show main window again
         self.deiconify()
 
+    def open_color_sampler(self):
+        self.log("Opening color sampler...")
+        # Hide main window
+        self.withdraw()
+        # Give a moment for window to hide
+        self.after(100, lambda: ColorSampler(self))
+
+    def on_color_sampled(self, bgr_color):
+        self.log(f"New color sampled: BGR={bgr_color}")
+        self.target_color_bgr = bgr_color
+
+        # Convert BGR to hex for GUI
+        b, g, r = bgr_color
+        hex_color = f"#{r:02x}{g:02x}{b:02x}".upper()
+
+        # Update GUI
+        self.color_preview.config(bg=hex_color)
+        self.color_label.config(text=hex_color)
+
+        # Show main window again
+        self.deiconify()
+
     def open_color_picker(self):
         # The askcolor function returns a tuple: ((R, G, B), '#RRGGBB')
         chosen_color = colorchooser.askcolor(color=self.color_label.cget("text"))
@@ -181,6 +218,42 @@ class App(tk.Tk):
         timestamp = time.strftime("%H:%M:%S")
         self.log_area.insert(tk.END, f"[{timestamp}] {message}\n")
         self.log_area.see(tk.END)
+
+class ColorSampler(tk.Toplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.master = master
+
+        # Make fullscreen, transparent, and stay on top
+        self.attributes("-fullscreen", True)
+        self.attributes("-alpha", 0.1) # Very transparent
+        self.attributes("-topmost", True)
+
+        self.canvas = tk.Canvas(self, cursor="cross")
+        self.canvas.pack(fill="both", expand=True)
+
+        self.canvas.bind("<ButtonPress-1>", self.on_mouse_press)
+
+    def on_mouse_press(self, event):
+        x, y = event.x_root, event.y_root
+
+        # Capture 1x1 pixel at the cursor's location
+        with mss.mss() as sct:
+            region = {'top': y, 'left': x, 'width': 1, 'height': 1}
+            img = sct.grab(region)
+
+        # mss gives BGRA, convert to NumPy array to get the color
+        bgr_color = np.array(img)[0, 0]
+        # Extract BGR and ignore Alpha channel
+        b, g, r = bgr_color[0], bgr_color[1], bgr_color[2]
+
+        # Pass color back to master
+        # The master needs an on_color_sampled method
+        self.master.on_color_sampled([b, g, r])
+
+        # Close the sampler
+        self.destroy()
+
 
 class AreaSelector(tk.Toplevel):
     def __init__(self, master):
