@@ -14,7 +14,7 @@ import cv2
 from PIL import Image, ImageTk
 from screen_capture import capture_screen
 from image_analyzer import find_color, find_image
-from automation import click_at, type_text, click_and_drag
+from automation import click_at, type_text
 
 class App(tk.Tk):
     def __init__(self):
@@ -37,6 +37,7 @@ class App(tk.Tk):
         self.hotkey_listener = None
         self.action_sequence = []
         self.current_step_index = 0
+        self.current_retry_count = 0
         self.hide_window_var = tk.BooleanVar(value=True)
         self.target_window_title = tk.StringVar()
         self.target_window_title.set("") # Set to empty string initially
@@ -137,10 +138,22 @@ class App(tk.Tk):
     def update_sequence_listbox(self):
         self.sequence_listbox.delete(0, tk.END)
         for i, step in enumerate(self.action_sequence):
-            mode = step['detection_mode']
-            action = step['action_type']
-            target = step.get('detection_target_name', 'Unknown')
-            text = f"{i+1}: Find {mode} '{target}', then {action}"
+            step_type = step.get('step_type', 'simple')
+            text = f"{i+1}: "
+
+            if step_type == 'simple':
+                mode = step.get('detection_mode', '?')
+                action = step.get('action_type', '?')
+                target = step.get('detection_target_name', 'Unknown')
+                text += f"Find {mode} '{target}', then {action}"
+            elif step_type == 'conditional_loop':
+                primary_target_name = step.get('primary_target', {}).get('detection_target_name', 'N/A')
+                fallback_action = step.get('on_fail', {}).get('action_type', 'N/A')
+                retries = step.get('max_retries', 'N/A')
+                text += f"LOOP ({retries}x): Find '{primary_target_name}', on fail: {fallback_action}"
+            else:
+                text += "Unknown Step Type"
+
             self.sequence_listbox.insert(tk.END, text)
         self.on_sequence_select(None)
 
@@ -162,6 +175,7 @@ class App(tk.Tk):
                 self.log("Cannot start: Action sequence is empty.")
                 return
             self.current_step_index = 0
+            self.current_retry_count = 0
             self.running = True
             self.start_button.config(text="Stop Bot")
             self.start_hotkey_listener()
@@ -179,8 +193,18 @@ class App(tk.Tk):
             return
 
         current_step = self.action_sequence[self.current_step_index]
-        target_window_title = current_step.get("window_title")
+        step_type = current_step.get('step_type', 'simple')
 
+        if step_type == 'simple':
+            self._execute_simple_step(current_step)
+        elif step_type == 'conditional_loop':
+            self._execute_conditional_loop_step(current_step)
+        else:
+            self.log(f"Error: Unknown step type '{step_type}' at step {self.current_step_index + 1}. Stopping bot.")
+            self.toggle_bot()
+
+    def _execute_simple_step(self, step):
+        target_window_title = step.get("window_title")
         if not target_window_title:
             self.log(f"Error in Step {self.current_step_index+1}: No target window specified. Stopping bot.")
             self.toggle_bot()
@@ -199,21 +223,17 @@ class App(tk.Tk):
             self.toggle_bot()
             return
 
-        self.log(f"Executing Step {self.current_step_index+1}: Find {current_step['detection_mode']} '{current_step.get('detection_target_name', 'N/A')}'...")
-
+        self.log(f"Executing Step {self.current_step_index+1}: Find {step['detection_mode']} '{step.get('detection_target_name', 'N/A')}'...")
         haystack_img = capture_screen(scan_region)
 
         target_pos = None
-        mode = current_step['detection_mode']
-
-        if mode == "Color":
-            locations = find_color(haystack_img, current_step['detection_target'])
+        if step['detection_mode'] == "Color":
+            locations = find_color(haystack_img, step['detection_target'])
             if locations:
                 target_pos = locations[0]
-
-        elif mode == "Image":
+        elif step['detection_mode'] == "Image":
             try:
-                needle_img = cv2.imread(current_step['detection_target'], cv2.IMREAD_UNCHANGED)
+                needle_img = cv2.imread(step['detection_target'], cv2.IMREAD_UNCHANGED)
                 target_pos = find_image(haystack_img, needle_img)
             except Exception as e:
                 self.log(f"Step {self.current_step_index+1} Error: Could not load template. {e}")
@@ -221,12 +241,12 @@ class App(tk.Tk):
                 return
 
         if target_pos:
-            self.log(f"Step {self.current_step_index+1}: Target found at {target_pos} (relative).")
+            self.log(f"Step {self.current_step_index+1}: Target found.")
             abs_x = scan_region['left'] + target_pos[0]
             abs_y = scan_region['top'] + target_pos[1]
 
-            action_type = current_step['action_type']
-            action_params = current_step.get('action_params', {})
+            action_type = step['action_type']
+            action_params = step.get('action_params', {})
 
             if action_type == "Click":
                 self.log(f"Performing action: Click at ({abs_x}, {abs_y})")
@@ -235,20 +255,19 @@ class App(tk.Tk):
                 text = action_params.get('text', '')
                 self.log(f"Performing action: Type '{text}'")
                 type_text(text)
-            elif action_type == "Click and Drag":
-                offset_x = action_params.get('drag_offset_x', 0)
-                offset_y = action_params.get('drag_offset_y', 0)
-                end_x = abs_x + offset_x
-                end_y = abs_y + offset_y
-                self.log(f"Performing action: Drag from ({abs_x}, {abs_y}) to ({end_x}, {end_y})")
-                click_and_drag(abs_x, abs_y, end_x, end_y)
 
             self.current_step_index += 1
+            self.current_retry_count = 0 # Reset for next step
             self.log("Action complete. Moving to next step in 1 second...")
             self.scan_job = self.after(1000, self.run_scan_loop)
         else:
             self.log("Target not found. Re-scanning same step in 2 seconds...")
             self.scan_job = self.after(2000, self.run_scan_loop)
+
+    def _execute_conditional_loop_step(self, step):
+        # This will be implemented in the next step.
+        self.log("Conditional Loop execution is not yet implemented. Stopping bot.")
+        self.toggle_bot()
 
     def start_hotkey_listener(self):
         if self.hotkey_listener: return
@@ -453,36 +472,65 @@ class StepEditor(tk.Toplevel):
         self.index = index
 
         self.title("Step Editor")
-        self.geometry("450x600")
+        self.geometry("450x650") # Increased height for new options
         self.configure(bg=self.master.bg_color)
         self.transient(self.master)
         self.grab_set()
 
         # --- VARS ---
+        self.step_type = tk.StringVar(value=self.step_data.get('step_type', 'simple'))
+
+        # Vars for Simple Action
         self.detection_mode = tk.StringVar(value=self.step_data.get('detection_mode', 'Image'))
         self.action_type = tk.StringVar(value=self.step_data.get('action_type', 'Click'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
-        self.drag_offset_x = tk.StringVar(value=self.step_data.get('action_params', {}).get('drag_offset_x', '0'))
-        self.drag_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('drag_offset_y', '0'))
         self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title.get() or ''))
         self.target_color_bgr = self.step_data.get('detection_target', [0,0,255])
         self.template_var = tk.StringVar(value=os.path.basename(self.step_data.get('detection_target', '')) if self.step_data.get('detection_mode') == 'Image' else '')
 
         # --- WIDGETS ---
-        window_frame = tk.LabelFrame(self, text="1. Select Target Window", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+
+        # --- Step Type Selection ---
+        step_type_frame = tk.LabelFrame(self, text="Step Type", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        step_type_frame.pack(pady=10, padx=10, fill="x")
+        tk.Radiobutton(step_type_frame, text="Simple Action", variable=self.step_type, value="simple", command=self.on_step_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left", padx=5)
+        tk.Radiobutton(step_type_frame, text="Conditional Loop", state=tk.DISABLED, variable=self.step_type, value="conditional_loop", command=self.on_step_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left", padx=5)
+
+        # --- Main Frames for each step type ---
+        self.simple_action_frame = tk.Frame(self, bg=self.master.bg_color)
+        self.conditional_loop_frame = tk.Frame(self, bg=self.master.bg_color)
+
+        # --- UI for Simple Action Frame ---
+        self.build_simple_action_ui(self.simple_action_frame)
+
+        # --- UI for Conditional Loop Frame ---
+        # Placeholder for now
+        tk.Label(self.conditional_loop_frame, text="Conditional Loop UI (Coming Soon)", bg=self.master.bg_color, fg=self.master.text_color).pack(pady=20)
+
+        # --- Save/Cancel Buttons ---
+        button_frame = tk.Frame(self, bg=self.master.bg_color)
+        button_frame.pack(pady=20, side="bottom")
+        tk.Button(button_frame, text="Save Step", command=self.on_save, bg=self.master.button_color, fg=self.master.button_text_color, relief=tk.FLAT).pack(side="left", padx=10)
+        tk.Button(button_frame, text="Cancel", command=self.destroy, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left", padx=10)
+
+        self.on_step_type_change() # Set initial view
+
+    def build_simple_action_ui(self, parent_frame):
+        # This function builds the UI for a simple action, parented to the given frame.
+        window_frame = tk.LabelFrame(parent_frame, text="1. Select Target Window", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         window_frame.pack(pady=10, padx=10, fill="x")
         self.window_label = tk.Label(window_frame, textvariable=self.target_window_title, bg=self.master.widget_bg_color, fg=self.master.text_color, wraplength=250)
         self.window_label.pack(side="left", fill="x", expand=True, padx=5)
         tk.Button(window_frame, text="Select...", command=self.select_window, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left")
         if not self.target_window_title.get(): self.target_window_title.set("(None Selected)")
 
-        mode_frame = tk.LabelFrame(self, text="2. Choose What to Look For", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        mode_frame = tk.LabelFrame(parent_frame, text="2. Choose What to Look For", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         mode_frame.pack(pady=10, padx=10, fill="x")
         tk.Radiobutton(mode_frame, text="Color", variable=self.detection_mode, value="Color", command=self.on_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(mode_frame, text="Image", variable=self.detection_mode, value="Image", command=self.on_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
 
-        self.color_frame = tk.Frame(self, bg=self.master.bg_color)
-        self.image_frame = tk.Frame(self, bg=self.master.bg_color)
+        self.color_frame = tk.Frame(parent_frame, bg=self.master.bg_color)
+        self.image_frame = tk.Frame(parent_frame, bg=self.master.bg_color)
 
         tk.Button(self.color_frame, text="Sample Color", command=self.sample_color, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack()
         self.color_preview = tk.Frame(self.color_frame, bg=self.master._bgr_to_hex(self.target_color_bgr), width=25, height=25, relief=tk.SUNKEN, borderwidth=1)
@@ -493,34 +541,26 @@ class StepEditor(tk.Toplevel):
         self.template_dropdown.pack(pady=5)
         self.update_template_list()
 
-        action_frame = tk.LabelFrame(self, text="3. Choose Action", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        action_frame = tk.LabelFrame(parent_frame, text="3. Choose Action", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         action_frame.pack(pady=10, padx=10, fill="x")
         tk.Radiobutton(action_frame, text="Click", variable=self.action_type, value="Click", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
-        tk.Radiobutton(action_frame, text="Click and Drag", variable=self.action_type, value="Click and Drag", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Type", variable=self.action_type, value="Type", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
 
-        # --- Action Parameter Frames ---
         self.type_entry_frame = tk.Frame(action_frame, bg=self.master.bg_color)
         self.type_entry = tk.Entry(self.type_entry_frame, textvariable=self.text_to_type, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT)
         self.type_entry.pack(fill="x", padx=5, pady=5)
 
-        self.drag_frame = tk.Frame(action_frame, bg=self.master.bg_color)
-        drag_x_frame = tk.Frame(self.drag_frame, bg=self.master.bg_color)
-        tk.Label(drag_x_frame, text="X Offset:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
-        tk.Entry(drag_x_frame, textvariable=self.drag_offset_x, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
-        drag_x_frame.pack(fill="x", pady=2)
-        drag_y_frame = tk.Frame(self.drag_frame, bg=self.master.bg_color)
-        tk.Label(drag_y_frame, text="Y Offset:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
-        tk.Entry(drag_y_frame, textvariable=self.drag_offset_y, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
-        drag_y_frame.pack(fill="x", pady=2)
-
-        button_frame = tk.Frame(self, bg=self.master.bg_color)
-        button_frame.pack(pady=20)
-        tk.Button(button_frame, text="Save Step", command=self.on_save, bg=self.master.button_color, fg=self.master.button_text_color, relief=tk.FLAT).pack(side="left", padx=10)
-        tk.Button(button_frame, text="Cancel", command=self.destroy, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left", padx=10)
-
         self.on_mode_change()
         self.on_action_change()
+
+    def on_step_type_change(self):
+        step_type = self.step_type.get()
+        if step_type == 'simple':
+            self.conditional_loop_frame.pack_forget()
+            self.simple_action_frame.pack(fill="x", expand=True, padx=10)
+        else: # conditional_loop
+            self.simple_action_frame.pack_forget()
+            self.conditional_loop_frame.pack(fill="x", expand=True, padx=10)
 
     def on_mode_change(self):
         if self.detection_mode.get() == "Color":
@@ -533,46 +573,42 @@ class StepEditor(tk.Toplevel):
     def on_action_change(self):
         action = self.action_type.get()
         if action == "Type":
-            self.drag_frame.pack_forget()
             self.type_entry_frame.pack(fill="x", padx=5, pady=2)
-        elif action == "Click and Drag":
-            self.type_entry_frame.pack_forget()
-            self.drag_frame.pack(fill="x", padx=5, pady=2)
         else: # Click
             self.type_entry_frame.pack_forget()
-            self.drag_frame.pack_forget()
 
     def on_save(self):
-        step = {
-            "window_title": self.target_window_title.get(),
-            "detection_mode": self.detection_mode.get(),
-            "action_type": self.action_type.get(),
-            "action_params": {},
-            "detection_target": None,
-            "detection_target_name": ""
-        }
+        step_type = self.step_type.get()
 
-        action_type = step['action_type']
-        if action_type == 'Type':
-            step['action_params']['text'] = self.text_to_type.get()
-        elif action_type == 'Click and Drag':
-            try:
-                step['action_params']['drag_offset_x'] = int(self.drag_offset_x.get())
-                step['action_params']['drag_offset_y'] = int(self.drag_offset_y.get())
-            except ValueError:
-                self.master.log("Error: Drag offsets must be integers.")
-                return
+        if step_type == 'simple':
+            step = {
+                "step_type": "simple",
+                "window_title": self.target_window_title.get(),
+                "detection_mode": self.detection_mode.get(),
+                "action_type": self.action_type.get(),
+                "action_params": {},
+                "detection_target": None,
+                "detection_target_name": ""
+            }
 
-        if step['detection_mode'] == 'Color':
-            step['detection_target'] = self.target_color_bgr
-            step['detection_target_name'] = self.master._bgr_to_hex(self.target_color_bgr)
-        else: # Image
-            target_name = self.template_var.get()
-            if not target_name or target_name == "No templates found":
-                self.master.log("Error: No template image selected for this step.")
-                return
-            step['detection_target'] = os.path.join("templates", target_name)
-            step['detection_target_name'] = target_name
+            action_type = step['action_type']
+            if action_type == 'Type':
+                step['action_params']['text'] = self.text_to_type.get()
+
+            if step['detection_mode'] == 'Color':
+                step['detection_target'] = self.target_color_bgr
+                step['detection_target_name'] = self.master._bgr_to_hex(self.target_color_bgr)
+            else: # Image
+                target_name = self.template_var.get()
+                if not target_name or target_name == "No templates found":
+                    self.master.log("Error: No template image selected for this step.")
+                    return
+                step['detection_target'] = os.path.join("templates", target_name)
+                step['detection_target_name'] = target_name
+        else: # conditional_loop
+            # Placeholder for saving conditional loop data
+            self.master.log("Error: Saving conditional loops is not yet implemented.")
+            return
 
         self.master.on_step_saved(step, self.index)
         self.destroy()
