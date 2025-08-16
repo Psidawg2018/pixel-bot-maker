@@ -5,6 +5,8 @@ import time
 # Import our custom modules
 import numpy as np
 import mss
+from pynput import keyboard
+import threading
 from screen_capture import capture_screen
 from image_analyzer import find_color, find_text
 from automation import click_at
@@ -26,7 +28,7 @@ class App(tk.Tk):
 
         self.running = False
         self.scan_job = None
-        self.test_window = None
+        self.hotkey_listener = None
         # Set default scan region and color
         self.scan_region = {'top': 0, 'left': 0, 'width': 500, 'height': 500}
         self.target_color_bgr = [0, 0, 255] # Default to Red
@@ -105,31 +107,32 @@ class App(tk.Tk):
             if self.scan_job:
                 self.after_cancel(self.scan_job)
                 self.scan_job = None
+
+            # Stop the hotkey listener
+            if self.hotkey_listener:
+                self.hotkey_listener.stop()
+                self.hotkey_listener = None
+
             self.log("Bot stopped by user.")
-            if self.test_window:
-                self.test_window.destroy()
-                self.test_window = None
+
+            # Show the GUI
+            self.deiconify()
         else:
             # --- START THE BOT ---
             self.running = True
             self.start_button.config(text="Stop Bot")
-            self.log("Bot started...")
-            self.create_test_window()
-            self.run_scan_loop()
 
-    def create_test_window(self):
-        """Creates a small window with the currently selected target color."""
-        hex_color = self._bgr_to_hex(self.target_color_bgr)
-        self.log(f"Creating a target window at (100, 100) with color {hex_color}.")
-        self.test_window = tk.Toplevel(self)
-        self.test_window.title("Target")
-        self.test_window.geometry("50x50+100+100") # 50x50 window at x=100, y=100
-        self.test_window.configure(bg=hex_color)
-        # Prevent user from closing it manually, only bot can
-        self.test_window.protocol("WM_DELETE_WINDOW", lambda: None)
+            self.start_hotkey_listener()
+
+            # Hide the GUI
+            self.withdraw()
+
+            self.run_scan_loop()
 
     def run_scan_loop(self):
         if not self.running:
+            # This can happen if the hotkey stops the bot
+            # right before a scheduled scan starts.
             return
 
         self.log(f"Scanning region: {self.scan_region}")
@@ -154,7 +157,7 @@ class App(tk.Tk):
 
             # For the MVP, we stop the bot after one successful action
             self.log("Action complete. Stopping bot.")
-            self.toggle_bot() # This will toggle the state to off
+            self.toggle_bot() # This will stop the bot and show the GUI
 
         else:
             self.log("Target color not found. Re-scanning in 2 seconds...")
@@ -217,6 +220,25 @@ class App(tk.Tk):
         """Converts a BGR color list to a hex string."""
         b, g, r = bgr_color
         return f"#{r:02x}{g:02x}{b:02x}".upper()
+
+    def start_hotkey_listener(self):
+        """Starts a background thread to listen for the F9 stop hotkey."""
+        if self.hotkey_listener:
+            return
+
+        def on_press(key):
+            if key == keyboard.Key.f9:
+                # Schedule toggle_bot to be run in the main GUI thread
+                # This is crucial for thread safety with tkinter
+                self.after(0, self.toggle_bot)
+
+        # The listener runs in its own thread, so we use a thread object
+        self.hotkey_listener = keyboard.Listener(on_press=on_press)
+
+        # Using a daemon thread to ensure it exits when the main app exits
+        listener_thread = threading.Thread(target=self.hotkey_listener.run, daemon=True)
+        listener_thread.start()
+        self.log("Bot running... Press F9 to stop.")
 
     def log(self, message):
         timestamp = time.strftime("%H:%M:%S")
