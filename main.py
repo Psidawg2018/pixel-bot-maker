@@ -38,6 +38,7 @@ class App(tk.Tk):
         self.action_sequence = []
         self.current_step_index = 0
         self.hide_window_var = tk.BooleanVar(value=True)
+        self.target_window_title = None # A global default
 
         # Ensure templates directory exists
         if not os.path.exists("templates"):
@@ -88,7 +89,7 @@ class App(tk.Tk):
             self.remove_step_button.config(state=tk.DISABLED)
 
     def add_step(self):
-        StepEditor(self, master=self)
+        StepEditor(self)
 
     def edit_step(self):
         selected_indices = self.sequence_listbox.curselection()
@@ -96,7 +97,7 @@ class App(tk.Tk):
             return
         index = selected_indices[0]
         step_data = self.action_sequence[index]
-        StepEditor(self, master=self, step_data=step_data, index=index)
+        StepEditor(self, step_data=step_data, index=index)
 
     def remove_step(self):
         selected_indices = self.sequence_listbox.curselection()
@@ -224,8 +225,7 @@ class App(tk.Tk):
             self.scan_job = self.after(2000, self.run_scan_loop)
 
     def start_hotkey_listener(self):
-        if self.hotkey_listener:
-            return
+        if self.hotkey_listener: return
         def on_press(key):
             if key == keyboard.Key.f9:
                 self.after(0, self.toggle_bot)
@@ -239,11 +239,174 @@ class App(tk.Tk):
         self.log_area.insert(tk.END, f"[{timestamp}] {message}\n")
         self.log_area.see(tk.END)
 
-class StepEditor(tk.Toplevel):
-    def __init__(self, parent, master, step_data=None, index=None):
+    def _bgr_to_hex(self, bgr_color):
+        b, g, r = bgr_color
+        return f"#{r:02x}{g:02x}{b:02x}".upper()
+
+class WindowSelector(tk.Toplevel):
+    def __init__(self, master):
         super().__init__(master)
-        self.parent = parent
         self.master = master
+        self.title("Select a Window")
+        self.geometry("350x450")
+        # Access App's theme from the grandparent master (App -> StepEditor -> self)
+        app = self.master.master
+        self.configure(bg=app.bg_color)
+        self.transient(master)
+        self.grab_set()
+
+        self.listbox = tk.Listbox(self, bg=app.widget_bg_color, fg=app.text_color, relief=tk.FLAT)
+        self.listbox.pack(pady=10, padx=10, fill="both", expand=True)
+
+        button_frame = tk.Frame(self, bg=app.bg_color)
+        button_frame.pack(pady=10)
+
+        tk.Button(button_frame, text="Refresh", command=self.populate_windows, bg=app.widget_bg_color, fg=app.text_color, relief=tk.FLAT).pack(side="left", padx=5)
+        tk.Button(button_frame, text="Select", command=self.on_select, bg=app.button_color, fg=app.button_text_color, relief=tk.FLAT).pack(side="left", padx=5)
+        tk.Button(button_frame, text="Cancel", command=self.destroy, bg=app.widget_bg_color, fg=app.text_color, relief=tk.FLAT).pack(side="left", padx=5)
+
+        self.populate_windows()
+
+    def populate_windows(self):
+        self.listbox.delete(0, tk.END)
+        titles = sorted([title for title in gw.getAllTitles() if title])
+        for title in titles:
+            self.listbox.insert(tk.END, title)
+
+    def on_select(self):
+        selected_indices = self.listbox.curselection()
+        if not selected_indices:
+            return
+        selected_title = self.listbox.get(selected_indices[0])
+        self.master.on_window_selected(selected_title)
+        self.destroy()
+
+
+class ScreenshotTaker(tk.Toplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.master = master
+        self.start_x = None
+        self.start_y = None
+        self.rect = None
+
+        # Configure the Toplevel window
+        self.attributes('-fullscreen', True)
+        self.attributes('-alpha', 0.3)
+        self.attributes('-topmost', True)
+        self.transient(master)
+        self.grab_set()
+
+        self.canvas = tk.Canvas(self, cursor="cross")
+        self.canvas.pack(fill="both", expand=True)
+
+        self.canvas.bind("<ButtonPress-1>", self.on_button_press)
+        self.canvas.bind("<B1-Motion>", self.on_mouse_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_button_release)
+        self.canvas.bind("<Escape>", lambda e: self.destroy())
+
+    def on_button_press(self, event):
+        self.start_x = self.canvas.canvasx(event.x)
+        self.start_y = self.canvas.canvasy(event.y)
+        # Create rectangle if it doesn't exist
+        if not self.rect:
+            self.rect = self.canvas.create_rectangle(self.start_x, self.start_y, self.start_x, self.start_y, outline='red', width=2)
+
+    def on_mouse_drag(self, event):
+        cur_x = self.canvas.canvasx(event.x)
+        cur_y = self.canvas.canvasy(event.y)
+        self.canvas.coords(self.rect, self.start_x, self.start_y, cur_x, cur_y)
+
+    def on_button_release(self, event):
+        end_x = self.canvas.canvasx(event.x)
+        end_y = self.canvas.canvasy(event.y)
+
+        # Check for a minimal size to avoid accidental clicks
+        if abs(end_x - self.start_x) < 5 or abs(end_y - self.start_y) < 5:
+            self.destroy()
+            return
+
+        # Determine the bounding box
+        x1 = int(min(self.start_x, end_x))
+        y1 = int(min(self.start_y, end_y))
+        x2 = int(max(self.start_x, end_x))
+        y2 = int(max(self.start_y, end_y))
+
+        # Hide this transparent window
+        self.withdraw()
+        # Give the window manager time to process the withdraw command
+        self.update_idletasks()
+        time.sleep(0.2)
+
+        # Capture the screen region
+        with mss.mss() as sct:
+            monitor = {"top": y1, "left": x1, "width": x2 - x1, "height": y2 - y1}
+            img = sct.grab(monitor)
+
+            # Convert to numpy array in BGR format for OpenCV
+            img_np = np.array(img)
+            img_bgr = cv2.cvtColor(img_np, cv2.COLOR_BGRA2BGR)
+
+        # Call the master's callback
+        self.master.on_screenshot_taken(img_bgr)
+
+        # Destroy this window
+        self.destroy()
+
+
+class ColorSampler(tk.Toplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.master = master
+        app = self.master.master # The App instance
+
+        # Hide the main window to get a clean screenshot
+        app.withdraw()
+        time.sleep(0.3) # Give WM time to hide the window
+
+        # Configure the sampler Toplevel window
+        self.attributes('-fullscreen', True)
+        self.attributes('-topmost', True)
+        self.transient(master)
+        self.grab_set()
+
+        # Take a screenshot of the primary monitor
+        with mss.mss() as sct:
+            # sct.monitors[0] is the entire virtual screen, [1] is the primary monitor
+            sct_img = sct.grab(sct.monitors[1])
+
+        # Convert to a PIL Image. mss provides .rgb for direct PIL compatibility.
+        self.pil_img = Image.frombytes("RGB", sct_img.size, sct_img.rgb)
+
+        # Now that the screenshot is taken, we can show the main window again
+        app.deiconify()
+
+        # Create a PhotoImage to display in Tkinter
+        self.tk_img = ImageTk.PhotoImage(self.pil_img)
+
+        self.canvas = tk.Canvas(self, cursor="tcross")
+        self.canvas.pack(fill="both", expand=True)
+        self.canvas.create_image(0, 0, image=self.tk_img, anchor="nw")
+
+        self.canvas.bind("<ButtonPress-1>", self.on_click)
+        self.canvas.bind("<Escape>", lambda e: self.destroy())
+
+    def on_click(self, event):
+        x, y = event.x, event.y
+        # Get the color from the original PIL image
+        rgb_color = self.pil_img.getpixel((x, y))
+        # Convert from tkinter's RGB to OpenCV's BGR
+        bgr_color = [rgb_color[2], rgb_color[1], rgb_color[0]]
+        # Pass the color to the parent's callback
+        self.master.on_color_sampled(bgr_color)
+        # Close the sampler
+        self.destroy()
+
+
+class StepEditor(tk.Toplevel):
+    def __init__(self, master, step_data=None, index=None):
+        super().__init__(master)
+        self.master = master # This is the App instance
         self.step_data = step_data if step_data else {}
         self.index = index
 
@@ -257,12 +420,11 @@ class StepEditor(tk.Toplevel):
         self.detection_mode = tk.StringVar(value=self.step_data.get('detection_mode', 'Image'))
         self.action_type = tk.StringVar(value=self.step_data.get('action_type', 'Click'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
-        self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', ''))
+        self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title or ''))
         self.target_color_bgr = self.step_data.get('detection_target', [0,0,255])
         self.template_var = tk.StringVar(value=os.path.basename(self.step_data.get('detection_target', '')) if self.step_data.get('detection_mode') == 'Image' else '')
 
         # --- WIDGETS ---
-        # Window
         window_frame = tk.LabelFrame(self, text="1. Select Target Window", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         window_frame.pack(pady=10, padx=10, fill="x")
         self.window_label = tk.Label(window_frame, textvariable=self.target_window_title, bg=self.master.widget_bg_color, fg=self.master.text_color, wraplength=250)
@@ -270,37 +432,29 @@ class StepEditor(tk.Toplevel):
         tk.Button(window_frame, text="Select...", command=self.select_window, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left")
         if not self.target_window_title.get(): self.target_window_title.set("(None Selected)")
 
-
-        # Detection Mode
         mode_frame = tk.LabelFrame(self, text="2. Choose What to Look For", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         mode_frame.pack(pady=10, padx=10, fill="x")
         tk.Radiobutton(mode_frame, text="Color", variable=self.detection_mode, value="Color", command=self.on_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(mode_frame, text="Image", variable=self.detection_mode, value="Image", command=self.on_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
 
-        # Detection Target
         self.color_frame = tk.Frame(self, bg=self.master.bg_color)
         self.image_frame = tk.Frame(self, bg=self.master.bg_color)
 
-        # Color Target UI
         tk.Button(self.color_frame, text="Sample Color", command=self.sample_color, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack()
         self.color_preview = tk.Frame(self.color_frame, bg=self.master._bgr_to_hex(self.target_color_bgr), width=25, height=25, relief=tk.SUNKEN, borderwidth=1)
         self.color_preview.pack(pady=5)
 
-        # Image Target UI
         tk.Button(self.image_frame, text="Take Screenshot", command=self.take_screenshot, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack()
         self.template_dropdown = tk.OptionMenu(self.image_frame, self.template_var, "")
         self.template_dropdown.pack(pady=5)
         self.update_template_list()
 
-
-        # Action
         action_frame = tk.LabelFrame(self, text="3. Choose Action", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         action_frame.pack(pady=10, padx=10, fill="x")
         tk.Radiobutton(action_frame, text="Click", variable=self.action_type, value="Click", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Type", variable=self.action_type, value="Type", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         self.type_entry = tk.Entry(action_frame, textvariable=self.text_to_type, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT)
 
-        # Save/Cancel
         button_frame = tk.Frame(self, bg=self.master.bg_color)
         button_frame.pack(pady=20)
         tk.Button(button_frame, text="Save Step", command=self.on_save, bg=self.master.button_color, fg=self.master.button_text_color, relief=tk.FLAT).pack(side="left", padx=10)
@@ -340,23 +494,50 @@ class StepEditor(tk.Toplevel):
             step['detection_target_name'] = self.master._bgr_to_hex(self.target_color_bgr)
         else: # Image
             target_name = self.template_var.get()
+            if not target_name or target_name == "No templates found":
+                self.master.log("Error: No template image selected for this step.")
+                return
             step['detection_target'] = os.path.join("templates", target_name)
             step['detection_target_name'] = target_name
 
         self.master.on_step_saved(step, self.index)
         self.destroy()
 
-    # These methods now act as proxies to the main App's tools
-    def select_window(self): self.master.open_window_selector(parent=self)
-    def on_window_selected(self, title): self.target_window_title.set(title)
-    def sample_color(self): self.master.open_color_sampler(parent=self)
-    def on_color_sampled(self, bgr):
-        self.target_color_bgr = bgr
-        self.color_preview.config(bg=self.master._bgr_to_hex(bgr))
-    def take_screenshot(self): self.master.open_screenshot_taker(parent=self)
+    def select_window(self):
+        WindowSelector(self)
+
+    def on_window_selected(self, title):
+        self.target_window_title.set(title)
+        self.master.log(f"Step editor window target set to: {title}")
+
+    def sample_color(self):
+        ColorSampler(self)
+
+    def on_color_sampled(self, bgr_color):
+        self.target_color_bgr = bgr_color
+        hex_color = self.master._bgr_to_hex(bgr_color)
+        self.color_preview.config(bg=hex_color)
+        self.master.log(f"Step color changed to {hex_color}")
+
+    def take_screenshot(self):
+        ScreenshotTaker(self)
+
     def on_screenshot_taken(self, image):
-        self.master.on_screenshot_taken(image, parent=self)
-        self.update_template_list()
+        self.master.log("Screenshot captured for step.")
+        filepath = filedialog.asksaveasfilename(
+            parent=self,
+            initialdir="templates",
+            title="Save Template",
+            filetypes=(("PNG files", "*.png"),),
+            defaultextension=".png"
+        )
+        if filepath:
+            try:
+                cv2.imwrite(filepath, image)
+                self.master.log(f"Template saved to {filepath}")
+                self.update_template_list()
+            except Exception as e:
+                self.master.log(f"Error saving template: {e}")
 
     def update_template_list(self):
         menu = self.template_dropdown["menu"]
@@ -369,9 +550,6 @@ class StepEditor(tk.Toplevel):
                 self.template_var.set(templates[0])
         else:
             self.template_var.set("No templates found")
-
-# ... (The other helper classes like WindowSelector, ColorSampler etc go here) ...
-# Need to update them to handle the 'parent' argument if they need to be modal to the StepEditor
 
 if __name__ == "__main__":
     app = App()
