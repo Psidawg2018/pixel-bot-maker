@@ -265,9 +265,93 @@ class App(tk.Tk):
             self.scan_job = self.after(2000, self.run_scan_loop)
 
     def _execute_conditional_loop_step(self, step):
-        # This will be implemented in the next step.
-        self.log("Conditional Loop execution is not yet implemented. Stopping bot.")
-        self.toggle_bot()
+        max_retries = step.get('max_retries', 5)
+        if self.current_retry_count >= max_retries:
+            self.log(f"Loop failed after {max_retries} retries for step {self.current_step_index + 1}. Stopping bot.")
+            self.toggle_bot()
+            return
+
+        # The window title for a conditional step is stored in the step itself
+        target_window_title = step.get("window_title")
+        if not target_window_title:
+            self.log(f"Error in Step {self.current_step_index+1}: No target window specified for conditional loop. Stopping bot.")
+            self.toggle_bot()
+            return
+
+        try:
+            target_windows = gw.getWindowsWithTitle(target_window_title)
+            if not target_windows:
+                self.log(f"Step {self.current_step_index+1}: Window '{target_window_title}' not found. Retrying in 2s...")
+                self.scan_job = self.after(2000, self.run_scan_loop)
+                return
+            target_window = target_windows[0]
+            scan_region = {'top': target_window.top, 'left': target_window.left, 'width': target_window.width, 'height': target_window.height}
+        except Exception as e:
+            self.log(f"Error getting window details: {e}. Stopping bot.")
+            self.toggle_bot()
+            return
+
+        # 1. Look for the primary target
+        primary_target = step.get('primary_target', {})
+        self.log(f"Loop Step {self.current_step_index+1} (Attempt {self.current_retry_count+1}/{max_retries}): Finding '{primary_target.get('detection_target_name')}'...")
+        haystack_img = capture_screen(scan_region)
+
+        primary_pos = None
+        try:
+            needle_img = cv2.imread(primary_target['detection_target'], cv2.IMREAD_UNCHANGED)
+            primary_pos = find_image(haystack_img, needle_img)
+        except Exception as e:
+            self.log(f"Loop Error: Could not load primary target image. {e}")
+            self.toggle_bot()
+            return
+
+        if primary_pos:
+            # 2. If found, success! Move to next step.
+            self.log("Primary target found! Proceeding to next step.")
+            self.current_retry_count = 0
+            self.current_step_index += 1
+            self.scan_job = self.after(1000, self.run_scan_loop)
+        else:
+            # 3. If not found, perform fallback action.
+            self.log("Primary target not found. Performing fallback action.")
+            self.current_retry_count += 1
+
+            fallback_action = step.get('on_fail', {})
+            if not fallback_action:
+                self.log("No fallback action defined. Stopping bot.")
+                self.toggle_bot()
+                return
+
+            if self._perform_fallback_action(fallback_action, scan_region):
+                self.log("Fallback action successful. Retrying primary target in 2 seconds...")
+                self.scan_job = self.after(2000, self.run_scan_loop) # Re-run the same conditional step
+            else:
+                self.log("Fallback action failed. Stopping bot.")
+                self.toggle_bot()
+
+    def _perform_fallback_action(self, action_details, scan_region):
+        self.log(f"Fallback: Finding '{action_details.get('detection_target_name')}'...")
+        haystack_img = capture_screen(scan_region)
+
+        target_pos = None
+        try:
+            needle_img = cv2.imread(action_details['detection_target'], cv2.IMREAD_UNCHANGED)
+            target_pos = find_image(haystack_img, needle_img)
+        except Exception as e:
+            self.log(f"Fallback Error: Could not load image. {e}")
+            return False
+
+        if target_pos:
+            abs_x = scan_region['left'] + target_pos[0]
+            abs_y = scan_region['top'] + target_pos[1]
+
+            if action_details['action_type'] == "Click":
+                self.log(f"Fallback action: Clicking at ({abs_x}, {abs_y})")
+                click_at(abs_x, abs_y)
+                return True
+
+        self.log("Fallback target not found.")
+        return False
 
     def start_hotkey_listener(self):
         if self.hotkey_listener: return
@@ -488,13 +572,20 @@ class StepEditor(tk.Toplevel):
         self.target_color_bgr = self.step_data.get('detection_target', [0,0,255])
         self.template_var = tk.StringVar(value=os.path.basename(self.step_data.get('detection_target', '')) if self.step_data.get('detection_mode') == 'Image' else '')
 
+        # Vars for Conditional Loop
+        self.max_retries = tk.StringVar(value=self.step_data.get('max_retries', '5'))
+        self.primary_template_var = tk.StringVar(value=self.step_data.get('primary_target', {}).get('detection_target_name', ''))
+        self.fallback_template_var = tk.StringVar(value=self.step_data.get('on_fail', {}).get('detection_target_name', ''))
+        self.fallback_action_type = tk.StringVar(value=self.step_data.get('on_fail', {}).get('action_type', 'Click'))
+        self._active_screenshot_target = None # Used to route screenshot callback
+
         # --- WIDGETS ---
 
         # --- Step Type Selection ---
         step_type_frame = tk.LabelFrame(self, text="Step Type", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         step_type_frame.pack(pady=10, padx=10, fill="x")
         tk.Radiobutton(step_type_frame, text="Simple Action", variable=self.step_type, value="simple", command=self.on_step_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left", padx=5)
-        tk.Radiobutton(step_type_frame, text="Conditional Loop", state=tk.DISABLED, variable=self.step_type, value="conditional_loop", command=self.on_step_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left", padx=5)
+        tk.Radiobutton(step_type_frame, text="Conditional Loop", variable=self.step_type, value="conditional_loop", command=self.on_step_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left", padx=5)
 
         # --- Main Frames for each step type ---
         self.simple_action_frame = tk.Frame(self, bg=self.master.bg_color)
@@ -504,8 +595,7 @@ class StepEditor(tk.Toplevel):
         self.build_simple_action_ui(self.simple_action_frame)
 
         # --- UI for Conditional Loop Frame ---
-        # Placeholder for now
-        tk.Label(self.conditional_loop_frame, text="Conditional Loop UI (Coming Soon)", bg=self.master.bg_color, fg=self.master.text_color).pack(pady=20)
+        self.build_conditional_loop_ui(self.conditional_loop_frame)
 
         # --- Save/Cancel Buttons ---
         button_frame = tk.Frame(self, bg=self.master.bg_color)
@@ -518,6 +608,66 @@ class StepEditor(tk.Toplevel):
     def build_simple_action_ui(self, parent_frame):
         # This function builds the UI for a simple action, parented to the given frame.
         window_frame = tk.LabelFrame(parent_frame, text="1. Select Target Window", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+
+    def build_conditional_loop_ui(self, parent_frame):
+        # --- Loop Settings ---
+        retries_frame = tk.LabelFrame(parent_frame, text="Loop Settings", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        retries_frame.pack(pady=5, padx=10, fill="x")
+        tk.Label(retries_frame, text="Max Retries:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(retries_frame, textvariable=self.max_retries, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=5).pack(side="left", padx=5)
+
+        # --- Primary Target ---
+        primary_target_frame = tk.LabelFrame(parent_frame, text="Primary Target (Image to find)", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        primary_target_frame.pack(pady=5, padx=10, fill="x")
+        self.primary_template_dropdown = self._build_image_selection_ui(primary_target_frame, self.primary_template_var, "primary")
+
+        # --- Fallback Action ---
+        fallback_action_frame = tk.LabelFrame(parent_frame, text="Fallback Action (If primary target not found)", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        fallback_action_frame.pack(pady=5, padx=10, fill="x")
+
+        tk.Label(fallback_action_frame, text="Action:", bg=self.master.bg_color, fg=self.master.text_color).pack(pady=2, anchor="w", padx=5)
+        tk.Radiobutton(fallback_action_frame, text="Click", variable=self.fallback_action_type, value="Click", bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w", padx=15)
+
+        tk.Label(fallback_action_frame, text="Target for Fallback Action:", bg=self.master.bg_color, fg=self.master.text_color).pack(pady=2, anchor="w", padx=5)
+        self.fallback_template_dropdown = self._build_image_selection_ui(fallback_action_frame, self.fallback_template_var, "fallback")
+
+        self.update_conditional_template_lists()
+
+    def _build_image_selection_ui(self, parent, template_var, target_key):
+        frame = tk.Frame(parent, bg=self.master.bg_color)
+        tk.Button(frame, text="Take Screenshot", command=lambda: self.take_screenshot_for(target_key), bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left", padx=5, pady=5)
+
+        dropdown = tk.OptionMenu(frame, template_var, "No templates found")
+        dropdown.config(bg=self.master.widget_bg_color, fg=self.master.text_color, activebackground=self.master.widget_bg_color, activeforeground=self.master.text_color, relief=tk.FLAT)
+        dropdown["menu"].config(bg=self.master.widget_bg_color, fg=self.master.text_color)
+        dropdown.pack(side="left", padx=5, pady=5, fill="x", expand=True)
+        frame.pack(fill="x", expand=True)
+        return dropdown
+
+    def take_screenshot_for(self, target_type):
+        self._active_screenshot_target = target_type
+        self.take_screenshot()
+
+    def update_conditional_template_lists(self):
+        templates = [f for f in os.listdir("templates") if f.endswith(".png")]
+        if not templates:
+            templates = ["No templates found"]
+
+        # Update primary dropdown
+        menu1 = self.primary_template_dropdown["menu"]
+        menu1.delete(0, "end")
+        for t in templates:
+            menu1.add_command(label=t, command=lambda v=t: self.primary_template_var.set(v))
+        if self.primary_template_var.get() not in templates:
+             self.primary_template_var.set(templates[0])
+
+        # Update fallback dropdown
+        menu2 = self.fallback_template_dropdown["menu"]
+        menu2.delete(0, "end")
+        for t in templates:
+            menu2.add_command(label=t, command=lambda v=t: self.fallback_template_var.set(v))
+        if self.fallback_template_var.get() not in templates:
+            self.fallback_template_var.set(templates[0])
         window_frame.pack(pady=10, padx=10, fill="x")
         self.window_label = tk.Label(window_frame, textvariable=self.target_window_title, bg=self.master.widget_bg_color, fg=self.master.text_color, wraplength=250)
         self.window_label.pack(side="left", fill="x", expand=True, padx=5)
@@ -606,9 +756,38 @@ class StepEditor(tk.Toplevel):
                 step['detection_target'] = os.path.join("templates", target_name)
                 step['detection_target_name'] = target_name
         else: # conditional_loop
-            # Placeholder for saving conditional loop data
-            self.master.log("Error: Saving conditional loops is not yet implemented.")
-            return
+            primary_target_name = self.primary_template_var.get()
+            fallback_target_name = self.fallback_template_var.get()
+
+            if not primary_target_name or "No templates" in primary_target_name:
+                self.master.log("Error: A primary target image must be selected for a conditional loop.")
+                return
+            if not fallback_target_name or "No templates" in fallback_target_name:
+                self.master.log("Error: A fallback target image must be selected for a conditional loop.")
+                return
+
+            try:
+                max_retries = int(self.max_retries.get())
+            except ValueError:
+                self.master.log("Error: Max retries must be an integer.")
+                return
+
+            step = {
+                "step_type": "conditional_loop",
+                "window_title": self.target_window_title.get(),
+                "max_retries": max_retries,
+                "primary_target": {
+                    "detection_mode": "Image",
+                    "detection_target": os.path.join("templates", primary_target_name),
+                    "detection_target_name": primary_target_name,
+                },
+                "on_fail": {
+                    "action_type": self.fallback_action_type.get(),
+                    "detection_mode": "Image",
+                    "detection_target": os.path.join("templates", fallback_target_name),
+                    "detection_target_name": fallback_target_name,
+                }
+            }
 
         self.master.on_step_saved(step, self.index)
         self.destroy()
@@ -645,7 +824,24 @@ class StepEditor(tk.Toplevel):
             try:
                 cv2.imwrite(filepath, image)
                 self.master.log(f"Template saved to {filepath}")
+
+                # Update the correct variable based on which screenshot button was pressed
+                target_var = None
+                if self._active_screenshot_target == 'primary':
+                    target_var = self.primary_template_var
+                elif self._active_screenshot_target == 'fallback':
+                    target_var = self.fallback_template_var
+                else: # Default to the simple action template var
+                    target_var = self.template_var
+
+                if target_var:
+                    target_var.set(os.path.basename(filepath))
+
+                # Update all template lists
                 self.update_template_list()
+                if self.step_type.get() == 'conditional_loop':
+                    self.update_conditional_template_lists()
+
             except Exception as e:
                 self.master.log(f"Error saving template: {e}")
 
