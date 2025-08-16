@@ -41,23 +41,31 @@ class App(tk.Tk):
         if not os.path.exists("templates"):
             os.makedirs("templates")
 
-        # --- Configuration Frame ---
+        # --- WIDGET CREATION ORDER IS IMPORTANT ---
+        # 1. Create Log Area first, so other widgets can log during init.
+        self.log_area = scrolledtext.ScrolledText(
+            self, width=45, height=10,
+            bg=self.widget_bg_color, fg=self.text_color,
+            relief=tk.FLAT, insertbackground=self.text_color
+        )
+
+        # 2. Create main config frame
         config_frame = tk.Frame(self, bg=self.bg_color)
         config_frame.pack(pady=10, padx=10, fill="x", anchor="n")
 
-        # --- Mode Selection ---
+        # 3. Create all other widgets inside the config frame
+        # Mode Selection
         mode_frame = tk.Frame(config_frame, bg=self.bg_color)
         mode_frame.pack(fill="x", pady=5)
         self.detection_mode = tk.StringVar(value="Color")
 
         tk.Label(mode_frame, text="Mode:", bg=self.bg_color, fg=self.text_color).pack(side="left")
 
-        color_radio = tk.Radiobutton(mode_frame, text="Color", variable=self.detection_mode, value="Color", bg=self.bg_color, fg=self.text_color, selectcolor=self.widget_bg_color)
+        color_radio = tk.Radiobutton(mode_frame, text="Color", variable=self.detection_mode, value="Color", bg=self.bg_color, fg=self.text_color, selectcolor=self.widget_bg_color, command=self.on_mode_change)
         color_radio.pack(side="left", padx=5)
 
-        image_radio = tk.Radiobutton(mode_frame, text="Image", variable=self.detection_mode, value="Image", bg=self.bg_color, fg=self.text_color, selectcolor=self.widget_bg_color)
+        image_radio = tk.Radiobutton(mode_frame, text="Image", variable=self.detection_mode, value="Image", bg=self.bg_color, fg=self.text_color, selectcolor=self.widget_bg_color, command=self.on_mode_change)
         image_radio.pack(side="left", padx=5)
-
 
         # Window Selection
         window_frame = tk.Frame(config_frame, bg=self.bg_color)
@@ -76,7 +84,6 @@ class App(tk.Tk):
 
         # Color Selection
         self.color_config_frame = tk.Frame(config_frame, bg=self.bg_color)
-        self.color_config_frame.pack(fill="x", pady=10)
 
         color_buttons_frame = tk.Frame(self.color_config_frame, bg=self.bg_color)
         color_buttons_frame.pack(side="left", expand=True, fill="x")
@@ -104,10 +111,8 @@ class App(tk.Tk):
         )
         self.color_label.pack(pady=5)
 
-
-        # --- Template Frame ---
+        # Template Frame
         self.template_config_frame = tk.Frame(config_frame, bg=self.bg_color)
-        # self.template_config_frame.pack(pady=10, padx=10, fill="x") # Packed later by mode switch
 
         self.screenshot_button = tk.Button(
             self.template_config_frame, text="Take Screenshot for Template", command=self.open_screenshot_taker,
@@ -119,7 +124,7 @@ class App(tk.Tk):
         template_selection_frame.pack(fill="x", pady=(5, 0))
 
         self.template_var = tk.StringVar(self)
-        self.template_dropdown = tk.OptionMenu(template_selection_frame, self.template_var, "No templates found", command=self.on_template_selected)
+        self.template_dropdown = tk.OptionMenu(template_selection_frame, self.template_var, "", command=self.on_template_selected)
         self.template_dropdown.config(bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT)
         self.template_dropdown["menu"].config(bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT)
         self.template_dropdown.pack(side="left", expand=True, fill="x")
@@ -133,11 +138,7 @@ class App(tk.Tk):
         self.template_preview = tk.Label(self.template_config_frame, bg=self.widget_bg_color)
         self.template_preview.pack(pady=10, fill="x")
 
-        self.update_template_list()
-        self.detection_mode.trace("w", self.on_mode_change)
-        self.on_mode_change() # Set initial state
-
-
+        # 4. Pack the log area and start button at the end
         self.start_button = tk.Button(
             self, text="Start Bot", command=self.toggle_bot,
             bg=self.button_color, fg=self.button_text_color,
@@ -145,14 +146,12 @@ class App(tk.Tk):
             relief=tk.FLAT, padx=10, pady=5
         )
         self.start_button.pack(pady=10)
-
-        self.log_area = scrolledtext.ScrolledText(
-            self, width=45, height=10,
-            bg=self.widget_bg_color, fg=self.text_color,
-            relief=tk.FLAT, insertbackground=self.text_color
-        )
         self.log_area.pack(pady=10, padx=10)
+
+        # 5. Now that all widgets exist, set initial state
         self.log("Welcome! Press 'Start Bot' to begin.")
+        self.update_template_list()
+        self.on_mode_change() # Set initial UI state based on mode
 
     def on_mode_change(self, *args):
         mode = self.detection_mode.get()
