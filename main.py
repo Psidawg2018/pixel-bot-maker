@@ -348,6 +348,7 @@ class App(tk.Tk):
             offset_x = params.get('drag_offset_x', 0)
             offset_y = params.get('drag_offset_y', 0)
 
+
             # Drag from the center of the window
             start_x = scan_region['left'] + scan_region['width'] // 2
             start_y = scan_region['top'] + scan_region['height'] // 2
@@ -393,6 +394,7 @@ class App(tk.Tk):
                 return True
             else:
                 self.log("Fallback target not found.")
+
                 return False
 
         self.log(f"Unknown fallback action type: {action_type}")
@@ -827,8 +829,10 @@ class StepEditor(tk.Toplevel):
         # The offset frame is named 'fallback_drag_frame' but we reuse it for click offsets too.
         if action == "Click with Offset" or action == "Click and Drag":
             self.fallback_drag_frame.pack(fill="x", padx=15, pady=2)
-        else:
+            self.fallback_target_frame.pack_forget()
+        else: # Click
             self.fallback_drag_frame.pack_forget()
+            self.fallback_target_frame.pack(fill="x")
 
         # The image target is needed for Click and Click with Offset, but not for Click and Drag.
         if action == "Click and Drag":
@@ -880,10 +884,12 @@ class StepEditor(tk.Toplevel):
                 self.master.log("Error: A primary target image must be selected for a conditional loop.")
                 return
 
+
             # Validate fallback target for actions that require an image
             if fallback_action_type == "Click" or fallback_action_type == "Click with Offset":
                 if not fallback_target_name or "No templates" in fallback_target_name:
                     self.master.log(f"Error: A fallback target image must be selected for a '{fallback_action_type}' fallback action.")
+
                     return
 
             try:
@@ -893,7 +899,9 @@ class StepEditor(tk.Toplevel):
                 return
 
             on_fail_params = {}
+
             if fallback_action_type == "Click and Drag" or fallback_action_type == "Click with Offset":
+
                 try:
                     # We reuse the same UI variables for both drag and click offsets.
                     # For clarity in the saved data, we'll use different keys based on action type.
@@ -912,11 +920,14 @@ class StepEditor(tk.Toplevel):
                 "action_params": on_fail_params
             }
 
+
+
             if fallback_action_type == "Click" or fallback_action_type == "Click with Offset":
                 on_fail_dict["detection_mode"] = "Image"
                 on_fail_dict["detection_target"] = os.path.join("templates", fallback_target_name)
                 on_fail_dict["detection_target_name"] = fallback_target_name
             else:  # Click and Drag
+
                 on_fail_dict["detection_mode"] = None
                 on_fail_dict["detection_target"] = None
                 on_fail_dict["detection_target_name"] = None

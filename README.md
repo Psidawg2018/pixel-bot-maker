@@ -15,7 +15,8 @@ A simple GUI application for creating automated bot scripts that can find images
   #### Fallback Actions
   When a primary target in a conditional loop is not found, you can define a fallback action. There are two types:
 
-  - **Click**: This action requires a secondary image target. If the primary target is not found, the bot will search for this secondary target and click on it.
+
+  - **Click**: This action requires a secondary image target. If the primary target is not found, the bot will search for this secondary target and click on it. This is useful for navigating through menus or pages (e.g., clicking a "Next" button).
   - **Click with Offset**: This action also requires a secondary image target. It finds the target and then applies an X/Y offset before clicking. This is useful for clicking next to a known image when the button itself is not unique.
   - **Click and Drag**: This action does **not** use an image. Instead, it performs a drag action relative to the center of the target window. The X and Y offsets you provide will define the drag vector from the window's center. This is useful for actions like scrolling a list or moving a slider.
 - **Interactive Configuration:**
