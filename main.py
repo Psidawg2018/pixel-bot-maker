@@ -737,35 +737,6 @@ class StepEditor(tk.Toplevel):
         if self.fallback_template_var.get() not in templates:
             self.fallback_template_var.set(templates[0])
 
-        mode_frame = tk.LabelFrame(parent_frame, text="2. Choose What to Look For", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
-        mode_frame.pack(pady=10, padx=10, fill="x")
-        tk.Radiobutton(mode_frame, text="Color", variable=self.detection_mode, value="Color", command=self.on_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
-        tk.Radiobutton(mode_frame, text="Image", variable=self.detection_mode, value="Image", command=self.on_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
-
-        self.color_frame = tk.Frame(parent_frame, bg=self.master.bg_color)
-        self.image_frame = tk.Frame(parent_frame, bg=self.master.bg_color)
-
-        tk.Button(self.color_frame, text="Sample Color", command=self.sample_color, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack()
-        self.color_preview = tk.Frame(self.color_frame, bg=self.master._bgr_to_hex(self.target_color_bgr), width=25, height=25, relief=tk.SUNKEN, borderwidth=1)
-        self.color_preview.pack(pady=5)
-
-        tk.Button(self.image_frame, text="Take Screenshot", command=self.take_screenshot, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack()
-        self.template_dropdown = tk.OptionMenu(self.image_frame, self.template_var, "")
-        self.template_dropdown.pack(pady=5)
-        self.update_template_list()
-
-        action_frame = tk.LabelFrame(parent_frame, text="3. Choose Action", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
-        action_frame.pack(pady=10, padx=10, fill="x")
-        tk.Radiobutton(action_frame, text="Click", variable=self.action_type, value="Click", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
-        tk.Radiobutton(action_frame, text="Type", variable=self.action_type, value="Type", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
-
-        self.type_entry_frame = tk.Frame(action_frame, bg=self.master.bg_color)
-        self.type_entry = tk.Entry(self.type_entry_frame, textvariable=self.text_to_type, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT)
-        self.type_entry.pack(fill="x", padx=5, pady=5)
-
-        self.on_mode_change()
-        self.on_action_change()
-
     def on_step_type_change(self):
         step_type = self.step_type.get()
         if step_type == 'simple':
