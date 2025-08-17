@@ -342,21 +342,27 @@ class App(tk.Tk):
             return False
 
         if target_pos:
-            abs_x = scan_region['left'] + target_pos[0]
-            abs_y = scan_region['top'] + target_pos[1]
-
+            # For "Click", we use the found image's coordinates.
             if action_details['action_type'] == "Click":
+                abs_x = scan_region['left'] + target_pos[0]
+                abs_y = scan_region['top'] + target_pos[1]
                 self.log(f"Fallback action: Clicking at ({abs_x}, {abs_y})")
                 click_at(abs_x, abs_y)
                 return True
+            # For "Click and Drag", we use the window center as the starting point.
             elif action_details['action_type'] == "Click and Drag":
                 params = action_details.get('action_params', {})
                 offset_x = params.get('drag_offset_x', 0)
                 offset_y = params.get('drag_offset_y', 0)
-                end_x = abs_x + offset_x
-                end_y = abs_y + offset_y
-                self.log(f"Fallback action: Drag from ({abs_x}, {abs_y}) to ({end_x}, {end_y})")
-                click_and_drag(abs_x, abs_y, end_x, end_y)
+
+                # Drag from the center of the window
+                start_x = scan_region['left'] + scan_region['width'] // 2
+                start_y = scan_region['top'] + scan_region['height'] // 2
+                end_x = start_x + offset_x
+                end_y = start_y + offset_y
+
+                self.log(f"Fallback action: Drag from window center ({start_x}, {start_y}) to ({end_x}, {end_y})")
+                click_and_drag(start_x, start_y, end_x, end_y)
                 return True
 
         self.log("Fallback target not found.")
