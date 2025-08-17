@@ -330,42 +330,55 @@ class App(tk.Tk):
                 self.toggle_bot()
 
     def _perform_fallback_action(self, action_details, scan_region):
-        self.log(f"Fallback: Finding '{action_details.get('detection_target_name')}'...")
-        haystack_img = capture_screen(scan_region)
+        action_type = action_details.get('action_type')
 
-        target_pos = None
-        try:
-            needle_img = cv2.imread(action_details['detection_target'], cv2.IMREAD_UNCHANGED)
-            target_pos = find_image(haystack_img, needle_img)
-        except Exception as e:
-            self.log(f"Fallback Error: Could not load image. {e}")
-            return False
+        if action_type == "Click and Drag":
+            self.log("Fallback action: Performing 'Click and Drag'.")
+            self.log(f"  - Action Details: {json.dumps(action_details)}")
+            self.log(f"  - Scan Region: {json.dumps(scan_region)}")
 
-        if target_pos:
-            # For "Click", we use the found image's coordinates.
-            if action_details['action_type'] == "Click":
+            params = action_details.get('action_params', {})
+            offset_x = params.get('drag_offset_x', 0)
+            offset_y = params.get('drag_offset_y', 0)
+
+            # Drag from the center of the window
+            start_x = scan_region['left'] + scan_region['width'] // 2
+            start_y = scan_region['top'] + scan_region['height'] // 2
+            end_x = start_x + offset_x
+            end_y = start_y + offset_y
+
+            self.log(f"  - Calculated Start (Window Center): ({start_x}, {start_y})")
+            self.log(f"  - Calculated End (Center + Offset): ({end_x}, {end_y})")
+
+            click_and_drag(start_x, start_y, end_x, end_y)
+            self.log("  - Drag action completed.")
+            return True
+
+        elif action_type == "Click":
+            self.log(f"Fallback: Finding '{action_details.get('detection_target_name')}' to click.")
+            haystack_img = capture_screen(scan_region)
+
+            target_pos = None
+            try:
+                needle_img = cv2.imread(action_details['detection_target'], cv2.IMREAD_UNCHANGED)
+                if needle_img is None:
+                    raise IOError(f"File not found or image format not supported: {action_details['detection_target']}")
+                target_pos = find_image(haystack_img, needle_img)
+            except Exception as e:
+                self.log(f"Fallback Error: Could not load image. {e}")
+                return False
+
+            if target_pos:
                 abs_x = scan_region['left'] + target_pos[0]
                 abs_y = scan_region['top'] + target_pos[1]
                 self.log(f"Fallback action: Clicking at ({abs_x}, {abs_y})")
                 click_at(abs_x, abs_y)
                 return True
-            # For "Click and Drag", we use the window center as the starting point.
-            elif action_details['action_type'] == "Click and Drag":
-                params = action_details.get('action_params', {})
-                offset_x = params.get('drag_offset_x', 0)
-                offset_y = params.get('drag_offset_y', 0)
+            else:
+                self.log("Fallback click target not found.")
+                return False
 
-                # Drag from the center of the window
-                start_x = scan_region['left'] + scan_region['width'] // 2
-                start_y = scan_region['top'] + scan_region['height'] // 2
-                end_x = start_x + offset_x
-                end_y = start_y + offset_y
-
-                self.log(f"Fallback action: Drag from window center ({start_x}, {start_y}) to ({end_x}, {end_y})")
-                click_and_drag(start_x, start_y, end_x, end_y)
-                return True
-
-        self.log("Fallback target not found.")
+        self.log(f"Unknown fallback action type: {action_type}")
         return False
 
     def start_hotkey_listener(self):
@@ -701,8 +714,10 @@ class StepEditor(tk.Toplevel):
         drag_y_frame.pack(fill="x", pady=2)
 
         # --- Fallback Target ---
-        tk.Label(fallback_action_frame, text="Target for Fallback Action:", bg=self.master.bg_color, fg=self.master.text_color).pack(pady=2, anchor="w", padx=5)
-        self.fallback_template_dropdown = self._build_image_selection_ui(fallback_action_frame, self.fallback_template_var, "fallback")
+        self.fallback_target_frame = tk.Frame(fallback_action_frame, bg=self.master.bg_color)
+        tk.Label(self.fallback_target_frame, text="Target for Fallback Action:", bg=self.master.bg_color, fg=self.master.text_color).pack(pady=2, anchor="w", padx=5)
+        self.fallback_template_dropdown = self._build_image_selection_ui(self.fallback_target_frame, self.fallback_template_var, "fallback")
+        self.fallback_target_frame.pack(fill="x")
 
         self.update_conditional_template_lists()
         self.on_fallback_action_change()
@@ -770,8 +785,10 @@ class StepEditor(tk.Toplevel):
     def on_fallback_action_change(self):
         if self.fallback_action_type.get() == "Click and Drag":
             self.fallback_drag_frame.pack(fill="x", padx=15, pady=2)
-        else:
+            self.fallback_target_frame.pack_forget()
+        else: # Click
             self.fallback_drag_frame.pack_forget()
+            self.fallback_target_frame.pack(fill="x")
 
     def on_save(self):
         step_type = self.step_type.get()
@@ -804,13 +821,17 @@ class StepEditor(tk.Toplevel):
         else: # conditional_loop
             primary_target_name = self.primary_template_var.get()
             fallback_target_name = self.fallback_template_var.get()
+            fallback_action_type = self.fallback_action_type.get()
 
             if not primary_target_name or "No templates" in primary_target_name:
                 self.master.log("Error: A primary target image must be selected for a conditional loop.")
                 return
-            if not fallback_target_name or "No templates" in fallback_target_name:
-                self.master.log("Error: A fallback target image must be selected for a conditional loop.")
-                return
+
+            # Validate fallback target only if the action is 'Click'
+            if fallback_action_type == "Click":
+                if not fallback_target_name or "No templates" in fallback_target_name:
+                    self.master.log("Error: A fallback target image must be selected for a 'Click' fallback action.")
+                    return
 
             try:
                 max_retries = int(self.max_retries.get())
@@ -819,13 +840,27 @@ class StepEditor(tk.Toplevel):
                 return
 
             on_fail_params = {}
-            if self.fallback_action_type.get() == "Click and Drag":
+            if fallback_action_type == "Click and Drag":
                 try:
                     on_fail_params['drag_offset_x'] = int(self.fallback_drag_offset_x.get())
                     on_fail_params['drag_offset_y'] = int(self.fallback_drag_offset_y.get())
                 except ValueError:
                     self.master.log("Error: Fallback drag offsets must be integers.")
                     return
+
+            on_fail_dict = {
+                "action_type": fallback_action_type,
+                "action_params": on_fail_params
+            }
+
+            if fallback_action_type == "Click":
+                on_fail_dict["detection_mode"] = "Image"
+                on_fail_dict["detection_target"] = os.path.join("templates", fallback_target_name)
+                on_fail_dict["detection_target_name"] = fallback_target_name
+            else: # Click and Drag
+                on_fail_dict["detection_mode"] = None
+                on_fail_dict["detection_target"] = None
+                on_fail_dict["detection_target_name"] = None
 
             step = {
                 "step_type": "conditional_loop",
@@ -836,13 +871,7 @@ class StepEditor(tk.Toplevel):
                     "detection_target": os.path.join("templates", primary_target_name),
                     "detection_target_name": primary_target_name,
                 },
-                "on_fail": {
-                    "action_type": self.fallback_action_type.get(),
-                    "detection_mode": "Image",
-                    "detection_target": os.path.join("templates", fallback_target_name),
-                    "detection_target_name": fallback_target_name,
-                    "action_params": on_fail_params
-                }
+                "on_fail": on_fail_dict
             }
 
         self.master.on_step_saved(step, self.index)
