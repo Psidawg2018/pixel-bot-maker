@@ -616,7 +616,7 @@ class StepEditor(tk.Toplevel):
         self.index = index
 
         self.title("Step Editor")
-        self.geometry("450x650") # Increased height for new options
+        self.geometry("450x700") # Increased height for new options
         self.configure(bg=self.master.bg_color)
         self.transient(self.master)
         self.grab_set()
@@ -642,6 +642,13 @@ class StepEditor(tk.Toplevel):
         self.fallback_drag_offset_x = tk.StringVar(value=self.step_data.get('on_fail', {}).get('action_params', {}).get('drag_offset_x', '0'))
         self.fallback_drag_offset_y = tk.StringVar(value=self.step_data.get('on_fail', {}).get('action_params', {}).get('drag_offset_y', '0'))
         self._active_screenshot_target = None # Used to route screenshot callback
+
+        # Vars for Post-Action Wait
+        wait_params = self.step_data.get('wait_params', {})
+        self.wait_type = tk.StringVar(value=wait_params.get('type', 'Fixed'))
+        self.fixed_wait = tk.StringVar(value=wait_params.get('fixed_time', '1.0'))
+        self.min_wait = tk.StringVar(value=wait_params.get('min_time', '1.0'))
+        self.max_wait = tk.StringVar(value=wait_params.get('max_time', '2.0'))
 
         # --- LAYOUT FRAMES ---
         # A bottom frame for buttons that never gets pushed out of view
@@ -723,6 +730,7 @@ class StepEditor(tk.Toplevel):
 
         self.on_mode_change()
         self.on_action_change()
+        self._build_wait_ui(parent_frame).pack(pady=10, padx=10, fill="x")
 
     def build_conditional_loop_ui(self, parent_frame):
         # --- Loop Settings ---
@@ -767,6 +775,7 @@ class StepEditor(tk.Toplevel):
 
         self.update_conditional_template_lists()
         self.on_fallback_action_change()
+        self._build_wait_ui(parent_frame).pack(pady=10, padx=10, fill="x")
 
     def _build_image_selection_ui(self, parent, template_var, target_key):
         frame = tk.Frame(parent, bg=self.master.bg_color)
@@ -844,6 +853,43 @@ class StepEditor(tk.Toplevel):
         else: # Click
             self.fallback_drag_frame.pack_forget()
             self.fallback_target_frame.pack(fill="x")
+
+    def _build_wait_ui(self, parent_frame):
+        wait_frame = tk.LabelFrame(parent_frame, text="Post-Action Wait", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+
+        # --- Wait Type ---
+        wait_type_frame = tk.Frame(wait_frame, bg=self.master.bg_color)
+        tk.Radiobutton(wait_type_frame, text="None", variable=self.wait_type, value="None", command=self.on_wait_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
+        tk.Radiobutton(wait_type_frame, text="Fixed", variable=self.wait_type, value="Fixed", command=self.on_wait_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
+        tk.Radiobutton(wait_type_frame, text="Random", variable=self.wait_type, value="Random", command=self.on_wait_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
+        wait_type_frame.pack(fill="x", pady=(0,5))
+
+        # --- Fixed Wait Frame ---
+        self.fixed_wait_frame = tk.Frame(wait_frame, bg=self.master.bg_color)
+        tk.Label(self.fixed_wait_frame, text="Wait (sec):", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(self.fixed_wait_frame, textvariable=self.fixed_wait, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+
+        # --- Random Wait Frame ---
+        self.random_wait_frame = tk.Frame(wait_frame, bg=self.master.bg_color)
+        tk.Label(self.random_wait_frame, text="Min (sec):", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(self.random_wait_frame, textvariable=self.min_wait, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+        tk.Label(self.random_wait_frame, text="Max (sec):", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=(10,5))
+        tk.Entry(self.random_wait_frame, textvariable=self.max_wait, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+
+        self.on_wait_type_change() # Set initial visibility
+        return wait_frame
+
+    def on_wait_type_change(self):
+        wait_type = self.wait_type.get()
+        if wait_type == "Fixed":
+            self.fixed_wait_frame.pack(fill="x", pady=2)
+            self.random_wait_frame.pack_forget()
+        elif wait_type == "Random":
+            self.fixed_wait_frame.pack_forget()
+            self.random_wait_frame.pack(fill="x", pady=2)
+        else: # None
+            self.fixed_wait_frame.pack_forget()
+            self.random_wait_frame.pack_forget()
 
     def on_save(self):
         step_type = self.step_type.get()
@@ -938,6 +984,23 @@ class StepEditor(tk.Toplevel):
                 },
                 "on_fail": on_fail_dict
             }
+
+        # --- Save Wait Parameters ---
+        wait_type = self.wait_type.get()
+        wait_params = {'type': wait_type}
+        try:
+            if wait_type == 'Fixed':
+                wait_params['fixed_time'] = float(self.fixed_wait.get())
+            elif wait_type == 'Random':
+                wait_params['min_time'] = float(self.min_wait.get())
+                wait_params['max_time'] = float(self.max_wait.get())
+                if wait_params['min_time'] >= wait_params['max_time']:
+                    self.master.log("Error: Min wait time must be less than max wait time.")
+                    return
+        except ValueError:
+            self.master.log("Error: Wait times must be valid numbers.")
+            return
+        step['wait_params'] = wait_params
 
         self.master.on_step_saved(step, self.index)
         self.destroy()
