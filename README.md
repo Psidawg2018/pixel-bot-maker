@@ -18,7 +18,6 @@ A simple GUI application for creating automated bot scripts that can find images
 - **Human-like Delays:**
   - **Post-Action Wait:** For any step, you can configure a wait time that occurs after the action is successfully completed. This makes the automation appear less robotic.
   - **Wait Options:** You can choose between no wait, a fixed duration, or a random duration between a min and max value.
-
 - **Interactive Configuration:**
   - **Window Selector:** Select a specific application window for the bot to operate within.
   - **Image Template Manager:** Take screenshots of screen regions to use as image targets.
