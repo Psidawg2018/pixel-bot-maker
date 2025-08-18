@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import scrolledtext, colorchooser, filedialog
 import time
 import json
+import random
 
 # Import our custom modules
 import numpy as np
@@ -183,6 +184,28 @@ class App(tk.Tk):
                 self.withdraw()
             self.run_scan_loop()
 
+    def _handle_post_action_wait(self, step):
+        wait_params = step.get('wait_params', {})
+        wait_type = wait_params.get('type', 'Fixed')
+        wait_duration = 0
+
+        if wait_type == 'Fixed':
+            wait_duration = wait_params.get('fixed_time', 1.0)
+        elif wait_type == 'Random':
+            min_time = wait_params.get('min_time', 1.0)
+            max_time = wait_params.get('max_time', 2.0)
+            wait_duration = random.uniform(min_time, max_time)
+
+        # The wait duration from config is in seconds. 'after' needs milliseconds.
+        wait_ms = int(wait_duration * 1000)
+
+        if wait_ms > 0:
+            self.log(f"Waiting for {wait_duration:.2f} seconds...")
+            self.scan_job = self.after(wait_ms, self.run_scan_loop)
+        else:
+            # If no wait, or wait is 0, proceed to the next step immediately.
+            self.run_scan_loop()
+
     def run_scan_loop(self):
         if not self.running:
             return
@@ -265,8 +288,8 @@ class App(tk.Tk):
 
             self.current_step_index += 1
             self.current_retry_count = 0 # Reset for next step
-            self.log("Action complete. Moving to next step in 1 second...")
-            self.scan_job = self.after(1000, self.run_scan_loop)
+            self.log("Action complete.")
+            self._handle_post_action_wait(step)
         else:
             self.log("Target not found. Re-scanning same step in 2 seconds...")
             self.scan_job = self.after(2000, self.run_scan_loop)
@@ -317,7 +340,7 @@ class App(tk.Tk):
             self.log("Primary target found! Proceeding to next step.")
             self.current_retry_count = 0
             self.current_step_index += 1
-            self.scan_job = self.after(1000, self.run_scan_loop)
+            self._handle_post_action_wait(step)
         else:
             # 3. If not found, perform fallback action.
             self.log("Primary target not found. Performing fallback action.")
@@ -341,23 +364,26 @@ class App(tk.Tk):
 
         if action_type == "Click and Drag":
             self.log("Fallback action: Performing 'Click and Drag'.")
+
             self.log(f"  - Action Details: {json.dumps(action_details)}")
             self.log(f"  - Scan Region: {json.dumps(scan_region)}")
+
 
             params = action_details.get('action_params', {})
             offset_x = params.get('drag_offset_x', 0)
             offset_y = params.get('drag_offset_y', 0)
 
 
+
             # Drag from the center of the window
+
             start_x = scan_region['left'] + scan_region['width'] // 2
             start_y = scan_region['top'] + scan_region['height'] // 2
             end_x = start_x + offset_x
             end_y = start_y + offset_y
 
-            self.log(f"  - Calculated Start (Window Center): ({start_x}, {start_y})")
-            self.log(f"  - Calculated End (Center + Offset): ({end_x}, {end_y})")
 
+            self.log(f"Dragging from window center ({start_x}, {start_y}) to ({end_x}, {end_y})")
             click_and_drag(start_x, start_y, end_x, end_y)
             self.log("  - Drag action completed.")
             return True
@@ -394,7 +420,6 @@ class App(tk.Tk):
                 return True
             else:
                 self.log("Fallback target not found.")
-
                 return False
 
         self.log(f"Unknown fallback action type: {action_type}")
@@ -603,7 +628,7 @@ class StepEditor(tk.Toplevel):
         self.index = index
 
         self.title("Step Editor")
-        self.geometry("450x650") # Increased height for new options
+        self.geometry("450x700") # Increased height for new options
         self.configure(bg=self.master.bg_color)
         self.transient(self.master)
         self.grab_set()
@@ -614,6 +639,8 @@ class StepEditor(tk.Toplevel):
         # Vars for Simple Action
         self.detection_mode = tk.StringVar(value=self.step_data.get('detection_mode', 'Image'))
         self.action_type = tk.StringVar(value=self.step_data.get('action_type', 'Click'))
+        self.simple_click_offset_x = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_x', '0'))
+        self.simple_click_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_y', '0'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
         self.simple_click_offset_x = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_x', '0'))
         self.simple_click_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_y', '0'))
@@ -629,6 +656,13 @@ class StepEditor(tk.Toplevel):
         self.fallback_drag_offset_x = tk.StringVar(value=self.step_data.get('on_fail', {}).get('action_params', {}).get('drag_offset_x', '0'))
         self.fallback_drag_offset_y = tk.StringVar(value=self.step_data.get('on_fail', {}).get('action_params', {}).get('drag_offset_y', '0'))
         self._active_screenshot_target = None # Used to route screenshot callback
+
+        # Vars for Post-Action Wait
+        wait_params = self.step_data.get('wait_params', {})
+        self.wait_type = tk.StringVar(value=wait_params.get('type', 'Fixed'))
+        self.fixed_wait = tk.StringVar(value=wait_params.get('fixed_time', '1.0'))
+        self.min_wait = tk.StringVar(value=wait_params.get('min_time', '1.0'))
+        self.max_wait = tk.StringVar(value=wait_params.get('max_time', '2.0'))
 
         # --- LAYOUT FRAMES ---
         # A bottom frame for buttons that never gets pushed out of view
@@ -713,6 +747,7 @@ class StepEditor(tk.Toplevel):
 
         self.on_mode_change()
         self.on_action_change()
+        self._build_wait_ui(parent_frame).pack(pady=10, padx=10, fill="x")
 
     def build_conditional_loop_ui(self, parent_frame):
         # --- Loop Settings ---
@@ -757,6 +792,7 @@ class StepEditor(tk.Toplevel):
 
         self.update_conditional_template_lists()
         self.on_fallback_action_change()
+        self._build_wait_ui(parent_frame).pack(pady=10, padx=10, fill="x")
 
     def _build_image_selection_ui(self, parent, template_var, target_key):
         frame = tk.Frame(parent, bg=self.master.bg_color)
@@ -817,28 +853,65 @@ class StepEditor(tk.Toplevel):
             self.type_entry_frame.pack(fill="x", padx=5, pady=2)
             self.simple_offset_frame.pack_forget()
         elif action == "Click with Offset":
+
             self.type_entry_frame.pack_forget()
             self.simple_offset_frame.pack(fill="x", padx=15, pady=2)
         else:  # Click
             self.type_entry_frame.pack_forget()
+
             self.simple_offset_frame.pack_forget()
 
     def on_fallback_action_change(self):
         action = self.fallback_action_type.get()
 
-        # The offset frame is named 'fallback_drag_frame' but we reuse it for click offsets too.
-        if action == "Click with Offset" or action == "Click and Drag":
+        if action == "Click with Offset":
             self.fallback_drag_frame.pack(fill="x", padx=15, pady=2)
+            self.fallback_target_frame.pack(fill="x")
+        elif action == "Click and Drag":
+            self.fallback_drag_frame.pack(fill="x", padx=15, pady=2)
+
             self.fallback_target_frame.pack_forget()
         else: # Click
             self.fallback_drag_frame.pack_forget()
             self.fallback_target_frame.pack(fill="x")
 
-        # The image target is needed for Click and Click with Offset, but not for Click and Drag.
-        if action == "Click and Drag":
-            self.fallback_target_frame.pack_forget()
-        else:
-            self.fallback_target_frame.pack(fill="x")
+
+    def _build_wait_ui(self, parent_frame):
+        wait_frame = tk.LabelFrame(parent_frame, text="Post-Action Wait", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+
+        # --- Wait Type ---
+        wait_type_frame = tk.Frame(wait_frame, bg=self.master.bg_color)
+        tk.Radiobutton(wait_type_frame, text="None", variable=self.wait_type, value="None", command=self.on_wait_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
+        tk.Radiobutton(wait_type_frame, text="Fixed", variable=self.wait_type, value="Fixed", command=self.on_wait_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
+        tk.Radiobutton(wait_type_frame, text="Random", variable=self.wait_type, value="Random", command=self.on_wait_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
+        wait_type_frame.pack(fill="x", pady=(0,5))
+
+        # --- Fixed Wait Frame ---
+        self.fixed_wait_frame = tk.Frame(wait_frame, bg=self.master.bg_color)
+        tk.Label(self.fixed_wait_frame, text="Wait (sec):", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(self.fixed_wait_frame, textvariable=self.fixed_wait, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+
+        # --- Random Wait Frame ---
+        self.random_wait_frame = tk.Frame(wait_frame, bg=self.master.bg_color)
+        tk.Label(self.random_wait_frame, text="Min (sec):", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(self.random_wait_frame, textvariable=self.min_wait, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+        tk.Label(self.random_wait_frame, text="Max (sec):", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=(10,5))
+        tk.Entry(self.random_wait_frame, textvariable=self.max_wait, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+
+        self.on_wait_type_change() # Set initial visibility
+        return wait_frame
+
+    def on_wait_type_change(self):
+        wait_type = self.wait_type.get()
+        if wait_type == "Fixed":
+            self.fixed_wait_frame.pack(fill="x", pady=2)
+            self.random_wait_frame.pack_forget()
+        elif wait_type == "Random":
+            self.fixed_wait_frame.pack_forget()
+            self.random_wait_frame.pack(fill="x", pady=2)
+        else: # None
+            self.fixed_wait_frame.pack_forget()
+            self.random_wait_frame.pack_forget()
 
     def on_save(self):
         step_type = self.step_type.get()
@@ -885,7 +958,6 @@ class StepEditor(tk.Toplevel):
                 return
 
 
-            # Validate fallback target for actions that require an image
             if fallback_action_type == "Click" or fallback_action_type == "Click with Offset":
                 if not fallback_target_name or "No templates" in fallback_target_name:
                     self.master.log(f"Error: A fallback target image must be selected for a '{fallback_action_type}' fallback action.")
@@ -901,10 +973,8 @@ class StepEditor(tk.Toplevel):
             on_fail_params = {}
 
             if fallback_action_type == "Click and Drag" or fallback_action_type == "Click with Offset":
-
                 try:
-                    # We reuse the same UI variables for both drag and click offsets.
-                    # For clarity in the saved data, we'll use different keys based on action type.
+
                     if fallback_action_type == "Click and Drag":
                         on_fail_params['drag_offset_x'] = int(self.fallback_drag_offset_x.get())
                         on_fail_params['drag_offset_y'] = int(self.fallback_drag_offset_y.get())
@@ -921,12 +991,12 @@ class StepEditor(tk.Toplevel):
             }
 
 
-
             if fallback_action_type == "Click" or fallback_action_type == "Click with Offset":
                 on_fail_dict["detection_mode"] = "Image"
                 on_fail_dict["detection_target"] = os.path.join("templates", fallback_target_name)
                 on_fail_dict["detection_target_name"] = fallback_target_name
-            else:  # Click and Drag
+
+            else: # Click and Drag
 
                 on_fail_dict["detection_mode"] = None
                 on_fail_dict["detection_target"] = None
@@ -943,6 +1013,23 @@ class StepEditor(tk.Toplevel):
                 },
                 "on_fail": on_fail_dict
             }
+
+        # --- Save Wait Parameters ---
+        wait_type = self.wait_type.get()
+        wait_params = {'type': wait_type}
+        try:
+            if wait_type == 'Fixed':
+                wait_params['fixed_time'] = float(self.fixed_wait.get())
+            elif wait_type == 'Random':
+                wait_params['min_time'] = float(self.min_wait.get())
+                wait_params['max_time'] = float(self.max_wait.get())
+                if wait_params['min_time'] >= wait_params['max_time']:
+                    self.master.log("Error: Min wait time must be less than max wait time.")
+                    return
+        except ValueError:
+            self.master.log("Error: Wait times must be valid numbers.")
+            return
+        step['wait_params'] = wait_params
 
         self.master.on_step_saved(step, self.index)
         self.destroy()

@@ -10,15 +10,15 @@ A simple GUI application for creating automated bot scripts that can find images
   - **Click with Offset:** Find a target image and then click at a position relative to the center of that image, based on the X and Y offsets you provide.
   - **Type:** Find a target and then type a specified text string.
 - **Conditional Logic:**
-  - **Conditional Loops:** Create complex steps that will try to find a primary image target. If the target isn't found, it can perform a fallback action (like clicking a 'Next' button) and then retry, up to a specified number of times.
-
+  - **Conditional Loops:** Create complex steps that will try to find a primary image target. If the target isn't found, it can perform a fallback action.
   #### Fallback Actions
-  When a primary target in a conditional loop is not found, you can define a fallback action. There are two types:
-
-
-  - **Click**: This action requires a secondary image target. If the primary target is not found, the bot will search for this secondary target and click on it. This is useful for navigating through menus or pages (e.g., clicking a "Next" button).
+  - **Click**: This action requires a secondary image target. If the primary target is not found, the bot will search for this secondary target and click on it.
   - **Click with Offset**: This action also requires a secondary image target. It finds the target and then applies an X/Y offset before clicking. This is useful for clicking next to a known image when the button itself is not unique.
-  - **Click and Drag**: This action does **not** use an image. Instead, it performs a drag action relative to the center of the target window. The X and Y offsets you provide will define the drag vector from the window's center. This is useful for actions like scrolling a list or moving a slider.
+  - **Click and Drag**: This action does **not** use an image. Instead, it performs a drag action relative to the center of the target window. The X and Y offsets you provide will define the drag vector from the window's center. This is useful for actions like scrolling a list.
+- **Human-like Delays:**
+  - **Post-Action Wait:** For any step, you can configure a wait time that occurs after the action is successfully completed. This makes the automation appear less robotic.
+  - **Wait Options:** You can choose between no wait, a fixed duration, or a random duration between a min and max value.
+
 - **Interactive Configuration:**
   - **Window Selector:** Select a specific application window for the bot to operate within.
   - **Image Template Manager:** Take screenshots of screen regions to use as image targets.
@@ -26,6 +26,11 @@ A simple GUI application for creating automated bot scripts that can find images
 - **Global Hotkey:** Press F9 to stop the bot at any time.
 
 ## Changelog
+
+### v0.2 - (2025-08-17)
+- **Added Configurable Post-Action Wait Times:** Users can now add a fixed or random delay after each successful step to make automation appear more human-like.
+- **Added "Click with Offset" Action:** Allows clicking at a specified offset from a found image, useful for ambiguous buttons.
+- **Decoupled "Click and Drag" from Image Detection:** The "Click and Drag" fallback action now correctly uses the window center as its origin, not an image.
 
 ### v0.1 - (2025-08-16)
 - **Initial feature set and bug fixes.**
