@@ -21,7 +21,7 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Pixel Bot")
-        self.geometry("400x750")
+        self.geometry("800x600")
 
         # --- Color Theme ---
         self.bg_color = "#2C3E50"
@@ -47,15 +47,27 @@ class App(tk.Tk):
         if not os.path.exists("templates"):
             os.makedirs("templates")
 
-        # --- WIDGET CREATION ---
-        top_frame = tk.Frame(self, bg=self.bg_color)
-        top_frame.pack(pady=10, padx=10, fill="x", anchor="n")
+        # --- Main Layout Frames ---
+        main_frame = tk.Frame(self, bg=self.bg_color)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        self.log_area = scrolledtext.ScrolledText(self, width=45, height=8, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, insertbackground=self.text_color)
+        left_frame = tk.Frame(main_frame, bg=self.bg_color)
+        left_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
+
+        right_frame = tk.Frame(main_frame, bg=self.bg_color)
+        right_frame.pack(side="right", fill="both", expand=True, padx=(5, 0))
+
+        # --- WIDGET CREATION (Right Panel) ---
+        self.log_area = scrolledtext.ScrolledText(right_frame, width=45, height=10, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, insertbackground=self.text_color)
+        self.log_area.pack(fill="both", expand=True)
+
+        # --- WIDGET CREATION (Left Panel) ---
+        # No more top_frame, widgets are packed directly into left_frame
 
         # --- Sequence Editor UI ---
-        sequence_frame = tk.LabelFrame(top_frame, text="Action Sequence", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
-        sequence_frame.pack(fill="x", pady=10)
+        sequence_frame = tk.LabelFrame(left_frame, text="Action Sequence", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
+        sequence_frame.pack(fill="x", pady=(0, 10), padx=10)
+
 
         # Frame for Save/Load buttons
         file_io_frame = tk.Frame(sequence_frame, bg=self.bg_color)
@@ -65,7 +77,7 @@ class App(tk.Tk):
 
         list_container = tk.Frame(sequence_frame, bg=self.bg_color)
         list_container.pack(fill="x")
-        self.sequence_listbox = tk.Listbox(list_container, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, height=5)
+        self.sequence_listbox = tk.Listbox(list_container, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, height=10)
         self.sequence_listbox.pack(side="left", fill="x", expand=True)
         self.sequence_listbox.bind("<<ListboxSelect>>", self.on_sequence_select)
         seq_button_frame = tk.Frame(list_container, bg=self.bg_color)
@@ -74,26 +86,29 @@ class App(tk.Tk):
         self.add_step_button.pack(pady=2, fill="x")
         self.edit_step_button = tk.Button(seq_button_frame, text="Edit", command=self.edit_step, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, state=tk.DISABLED)
         self.edit_step_button.pack(pady=2, fill="x")
+        self.move_up_button = tk.Button(seq_button_frame, text="Move Up", command=self.move_step_up, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, state=tk.DISABLED)
+        self.move_up_button.pack(pady=2, fill="x")
+        self.move_down_button = tk.Button(seq_button_frame, text="Move Down", command=self.move_step_down, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, state=tk.DISABLED)
+        self.move_down_button.pack(pady=2, fill="x")
         self.remove_step_button = tk.Button(seq_button_frame, text="Remove", command=self.remove_step, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, state=tk.DISABLED)
         self.remove_step_button.pack(pady=2, fill="x")
 
         # --- Final Controls ---
-        controls_frame = tk.LabelFrame(self, text="Global Target", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
+        controls_frame = tk.LabelFrame(left_frame, text="Global Target", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
         controls_frame.pack(pady=10, padx=10, fill="x")
 
         self.target_window_label = tk.Label(controls_frame, textvariable=self.target_window_title, bg=self.widget_bg_color, fg=self.text_color, wraplength=380, justify="left")
         self.target_window_label.pack(pady=5, fill="x")
         tk.Button(controls_frame, text="Change Target Window", command=self.prompt_for_window_selection, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT).pack(pady=(0,5))
 
-        bot_controls_frame = tk.Frame(self, bg=self.bg_color)
-        bot_controls_frame.pack(pady=10, padx=10, fill="x")
+        bot_controls_frame = tk.Frame(left_frame, bg=self.bg_color)
+        bot_controls_frame.pack(pady=10, padx=10, fill="x", side="bottom")
 
         self.hide_window_check = tk.Checkbutton(bot_controls_frame, text="Hide window when bot is running", variable=self.hide_window_var, bg=self.bg_color, fg=self.text_color, selectcolor=self.widget_bg_color, activebackground=self.bg_color, activeforeground=self.text_color)
         self.hide_window_check.pack()
 
         self.start_button = tk.Button(bot_controls_frame, text="Start Bot", command=self.toggle_bot, bg=self.button_color, fg=self.button_text_color, activebackground="#2980B9", activeforeground=self.text_color, relief=tk.FLAT, padx=10, pady=5)
         self.start_button.pack(pady=10)
-        self.log_area.pack(pady=10, padx=10, fill="both", expand=True)
 
         self.log("Welcome! Please select a target window to begin.")
         self.after(200, lambda: self.prompt_for_window_selection(is_splash=True))
@@ -109,12 +124,28 @@ class App(tk.Tk):
         self.log(f"Global target window set to: {title}")
 
     def on_sequence_select(self, event):
-        if self.sequence_listbox.curselection():
+        selected_indices = self.sequence_listbox.curselection()
+        if selected_indices:
+            index = selected_indices[0]
             self.edit_step_button.config(state=tk.NORMAL)
             self.remove_step_button.config(state=tk.NORMAL)
+
+            # Enable/disable Move Up button
+            if index > 0:
+                self.move_up_button.config(state=tk.NORMAL)
+            else:
+                self.move_up_button.config(state=tk.DISABLED)
+
+            # Enable/disable Move Down button
+            if index < len(self.action_sequence) - 1:
+                self.move_down_button.config(state=tk.NORMAL)
+            else:
+                self.move_down_button.config(state=tk.DISABLED)
         else:
             self.edit_step_button.config(state=tk.DISABLED)
             self.remove_step_button.config(state=tk.DISABLED)
+            self.move_up_button.config(state=tk.DISABLED)
+            self.move_down_button.config(state=tk.DISABLED)
 
     def add_step(self):
         StepEditor(self)
@@ -135,6 +166,34 @@ class App(tk.Tk):
         self.action_sequence.pop(index)
         self.update_sequence_listbox()
         self.log(f"Removed step {index+1}.")
+
+    def move_step_up(self):
+        selected_indices = self.sequence_listbox.curselection()
+        if not selected_indices:
+            return
+
+        index = selected_indices[0]
+        if index > 0:
+            # Swap with the previous item
+            self.action_sequence[index], self.action_sequence[index - 1] = self.action_sequence[index - 1], self.action_sequence[index]
+            self.update_sequence_listbox()
+            # Reselect the item at its new position
+            self.sequence_listbox.selection_set(index - 1)
+            self.on_sequence_select(None) # Update button states
+
+    def move_step_down(self):
+        selected_indices = self.sequence_listbox.curselection()
+        if not selected_indices:
+            return
+
+        index = selected_indices[0]
+        if index < len(self.action_sequence) - 1:
+            # Swap with the next item
+            self.action_sequence[index], self.action_sequence[index + 1] = self.action_sequence[index + 1], self.action_sequence[index]
+            self.update_sequence_listbox()
+            # Reselect the item at its new position
+            self.sequence_listbox.selection_set(index + 1)
+            self.on_sequence_select(None) # Update button states
 
     def on_step_saved(self, step_data, index=None):
         if index is not None:
@@ -675,7 +734,7 @@ class StepEditor(tk.Toplevel):
         self.index = index
 
         self.title("Step Editor")
-        self.geometry("450x700") # Increased height for new options
+        self.geometry("563x700") # Increased height for new options
         self.configure(bg=self.master.bg_color)
         self.transient(self.master)
         self.grab_set()
