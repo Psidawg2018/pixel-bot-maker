@@ -631,7 +631,10 @@ class StepEditor(tk.Toplevel):
         self.simple_click_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_y', '0'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
         self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title.get() or ''))
-        self.target_color_bgr = self.step_data.get('detection_target', [0,0,255])
+        if self.step_data.get('detection_mode') == 'Color':
+            self.target_color_bgr = self.step_data.get('detection_target', [0,0,255])
+        else:
+            self.target_color_bgr = [0,0,255] # Default value
         self.template_var = tk.StringVar(value=os.path.basename(self.step_data.get('detection_target', '')) if self.step_data.get('detection_mode') == 'Image' else '')
 
         # Vars for Conditional Loop
