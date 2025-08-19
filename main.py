@@ -238,6 +238,28 @@ class App(tk.Tk):
                 self.withdraw()
             self.run_scan_loop()
 
+    def _handle_post_action_wait(self, step):
+        wait_params = step.get('wait_params', {})
+        wait_type = wait_params.get('type', 'Fixed')
+        wait_duration = 0
+
+        if wait_type == 'Fixed':
+            wait_duration = wait_params.get('fixed_time', 1.0)
+        elif wait_type == 'Random':
+            min_time = wait_params.get('min_time', 1.0)
+            max_time = wait_params.get('max_time', 2.0)
+            wait_duration = random.uniform(min_time, max_time)
+
+        # The wait duration from config is in seconds. 'after' needs milliseconds.
+        wait_ms = int(wait_duration * 1000)
+
+        if wait_ms > 0:
+            self.log(f"Waiting for {wait_duration:.2f} seconds...")
+            self.scan_job = self.after(wait_ms, self.run_scan_loop)
+        else:
+            # If no wait, or wait is 0, proceed to the next step immediately.
+            self.run_scan_loop()
+
     def run_scan_loop(self):
         if not self.running:
             return
@@ -320,8 +342,8 @@ class App(tk.Tk):
 
             self.current_step_index += 1
             self.current_retry_count = 0 # Reset for next step
-            self.log("Action complete. Moving to next step in 1 second...")
-            self.scan_job = self.after(1000, self.run_scan_loop)
+            self.log("Action complete.")
+            self._handle_post_action_wait(step)
         else:
             self.log("Target not found. Re-scanning same step in 2 seconds...")
             self.scan_job = self.after(2000, self.run_scan_loop)
@@ -372,7 +394,7 @@ class App(tk.Tk):
             self.log("Primary target found! Proceeding to next step.")
             self.current_retry_count = 0
             self.current_step_index += 1
-            self.scan_job = self.after(1000, self.run_scan_loop)
+            self._handle_post_action_wait(step)
         else:
             # 3. If not found, perform fallback action.
             self.log("Primary target not found. Performing fallback action.")
@@ -394,10 +416,12 @@ class App(tk.Tk):
     def _perform_fallback_action(self, action_details, scan_region):
         action_type = action_details.get('action_type')
 
+
         if action_type == "Do Nothing":
             self.log("Fallback action: Doing nothing.")
             return True
         elif action_type == "Click and Drag":
+
             self.log("Fallback action: Performing 'Click and Drag'.")
             params = action_details.get('action_params', {})
             offset_x = params.get('drag_offset_x', 0)
@@ -651,7 +675,7 @@ class StepEditor(tk.Toplevel):
         self.index = index
 
         self.title("Step Editor")
-        self.geometry("450x650") # Increased height for new options
+        self.geometry("450x700") # Increased height for new options
         self.configure(bg=self.master.bg_color)
         self.transient(self.master)
         self.grab_set()
@@ -666,7 +690,10 @@ class StepEditor(tk.Toplevel):
         self.simple_click_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_y', '0'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
         self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title.get() or ''))
-        self.target_color_bgr = self.step_data.get('detection_target', [0,0,255])
+        if self.step_data.get('detection_mode') == 'Color':
+            self.target_color_bgr = self.step_data.get('detection_target', [0,0,255])
+        else:
+            self.target_color_bgr = [0,0,255] # Default value
         self.template_var = tk.StringVar(value=os.path.basename(self.step_data.get('detection_target', '')) if self.step_data.get('detection_mode') == 'Image' else '')
 
         # Vars for Conditional Loop
@@ -765,6 +792,7 @@ class StepEditor(tk.Toplevel):
 
         self.on_mode_change()
         self.on_action_change()
+        self._build_wait_ui(parent_frame).pack(pady=10, padx=10, fill="x")
 
     def build_conditional_loop_ui(self, parent_frame):
         # --- Loop Settings ---
@@ -810,6 +838,7 @@ class StepEditor(tk.Toplevel):
 
         self.update_conditional_template_lists()
         self.on_fallback_action_change()
+        self._build_wait_ui(parent_frame).pack(pady=10, padx=10, fill="x")
 
     def _build_image_selection_ui(self, parent, template_var, target_key):
         frame = tk.Frame(parent, bg=self.master.bg_color)
@@ -972,6 +1001,7 @@ class StepEditor(tk.Toplevel):
                 self.master.log("Error: A primary target image must be selected for a conditional loop.")
                 return
 
+
             if fallback_action_type in ["Click", "Click with Offset"]:
                 if not fallback_target_name or "No templates" in fallback_target_name:
                     self.master.log(f"Error: A fallback target image must be selected for a '{fallback_action_type}' fallback action.")
@@ -1001,6 +1031,7 @@ class StepEditor(tk.Toplevel):
                 "action_params": on_fail_params
             }
 
+
             if fallback_action_type in ["Click", "Click with Offset"]:
                 on_fail_dict["detection_mode"] = "Image"
                 on_fail_dict["detection_target"] = os.path.join("templates", fallback_target_name)
@@ -1011,6 +1042,7 @@ class StepEditor(tk.Toplevel):
                 on_fail_dict["detection_target_name"] = None
                 if fallback_action_type == "Do Nothing":
                     on_fail_dict["action_params"] = {}
+
 
             step = {
                 "step_type": "conditional_loop",
@@ -1023,6 +1055,23 @@ class StepEditor(tk.Toplevel):
                 },
                 "on_fail": on_fail_dict
             }
+
+        # --- Save Wait Parameters ---
+        wait_type = self.wait_type.get()
+        wait_params = {'type': wait_type}
+        try:
+            if wait_type == 'Fixed':
+                wait_params['fixed_time'] = float(self.fixed_wait.get())
+            elif wait_type == 'Random':
+                wait_params['min_time'] = float(self.min_wait.get())
+                wait_params['max_time'] = float(self.max_wait.get())
+                if wait_params['min_time'] >= wait_params['max_time']:
+                    self.master.log("Error: Min wait time must be less than max wait time.")
+                    return
+        except ValueError:
+            self.master.log("Error: Wait times must be valid numbers.")
+            return
+        step['wait_params'] = wait_params
 
         self.master.on_step_saved(step, self.index)
         self.destroy()
