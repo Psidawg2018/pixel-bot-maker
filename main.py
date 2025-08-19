@@ -56,6 +56,13 @@ class App(tk.Tk):
         # --- Sequence Editor UI ---
         sequence_frame = tk.LabelFrame(top_frame, text="Action Sequence", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
         sequence_frame.pack(fill="x", pady=10)
+
+        # Frame for Save/Load buttons
+        file_io_frame = tk.Frame(sequence_frame, bg=self.bg_color)
+        file_io_frame.pack(fill="x", pady=(0, 5))
+        tk.Button(file_io_frame, text="Load Sequence", command=self.load_sequence, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT).pack(side="left", padx=5)
+        tk.Button(file_io_frame, text="Save Sequence", command=self.save_sequence, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT).pack(side="left", padx=5)
+
         list_container = tk.Frame(sequence_frame, bg=self.bg_color)
         list_container.pack(fill="x")
         self.sequence_listbox = tk.Listbox(list_container, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, height=5)
@@ -157,6 +164,53 @@ class App(tk.Tk):
 
             self.sequence_listbox.insert(tk.END, text)
         self.on_sequence_select(None)
+
+    def save_sequence(self):
+        if not self.action_sequence:
+            self.log("Cannot save an empty sequence.")
+            return
+
+        filepath = filedialog.asksaveasfilename(
+            parent=self,
+            title="Save Sequence",
+            filetypes=(("JSON files", "*.json"), ("All files", "*.*")),
+            defaultextension=".json"
+        )
+        if not filepath:
+            return
+
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(self.action_sequence, f, indent=4)
+            self.log(f"Sequence saved to {os.path.basename(filepath)}")
+        except Exception as e:
+            self.log(f"Error saving sequence: {e}")
+
+    def load_sequence(self):
+        filepath = filedialog.askopenfilename(
+            parent=self,
+            title="Load Sequence",
+            filetypes=(("JSON files", "*.json"), ("All files", "*.*"))
+        )
+        if not filepath:
+            return
+
+        try:
+            with open(filepath, 'r') as f:
+                loaded_sequence = json.load(f)
+
+            if not isinstance(loaded_sequence, list):
+                raise TypeError("File does not contain a valid sequence list.")
+
+            self.action_sequence = loaded_sequence
+            self.update_sequence_listbox()
+            self.log(f"Sequence loaded from {os.path.basename(filepath)}")
+        except json.JSONDecodeError:
+            self.log("Error: The selected file is not a valid JSON file.")
+        except TypeError as e:
+            self.log(f"Error loading sequence: {e}")
+        except Exception as e:
+            self.log(f"An unexpected error occurred while loading: {e}")
 
     def toggle_bot(self):
         if self.running:
@@ -362,7 +416,12 @@ class App(tk.Tk):
     def _perform_fallback_action(self, action_details, scan_region):
         action_type = action_details.get('action_type')
 
-        if action_type == "Click and Drag":
+
+        if action_type == "Do Nothing":
+            self.log("Fallback action: Doing nothing.")
+            return True
+        elif action_type == "Click and Drag":
+
             self.log("Fallback action: Performing 'Click and Drag'.")
             params = action_details.get('action_params', {})
             offset_x = params.get('drag_offset_x', 0)
@@ -648,7 +707,7 @@ class StepEditor(tk.Toplevel):
 
         # Vars for Post-Action Wait
         wait_params = self.step_data.get('wait_params', {})
-        self.wait_type = tk.StringVar(value=wait_params.get('type', 'Fixed'))
+        self.wait_type = tk.StringVar(value=wait_params.get('type', 'None'))
         self.fixed_wait = tk.StringVar(value=wait_params.get('fixed_time', '1.0'))
         self.min_wait = tk.StringVar(value=wait_params.get('min_time', '1.0'))
         self.max_wait = tk.StringVar(value=wait_params.get('max_time', '2.0'))
@@ -757,6 +816,7 @@ class StepEditor(tk.Toplevel):
         tk.Radiobutton(fallback_action_type_frame, text="Click", variable=self.fallback_action_type, value="Click", command=self.on_fallback_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
         tk.Radiobutton(fallback_action_type_frame, text="Click with Offset", variable=self.fallback_action_type, value="Click with Offset", command=self.on_fallback_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
         tk.Radiobutton(fallback_action_type_frame, text="Click and Drag", variable=self.fallback_action_type, value="Click and Drag", command=self.on_fallback_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
+        tk.Radiobutton(fallback_action_type_frame, text="Do Nothing", variable=self.fallback_action_type, value="Do Nothing", command=self.on_fallback_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
         fallback_action_type_frame.pack(fill="x")
 
         # --- Fallback Action Params ---
@@ -853,6 +913,9 @@ class StepEditor(tk.Toplevel):
         elif action == "Click and Drag":
             self.fallback_drag_frame.pack(fill="x", padx=15, pady=2)
             self.fallback_target_frame.pack_forget()
+        elif action == "Do Nothing":
+            self.fallback_drag_frame.pack_forget()
+            self.fallback_target_frame.pack_forget()
         else: # Click
             self.fallback_drag_frame.pack_forget()
             self.fallback_target_frame.pack(fill="x")
@@ -938,7 +1001,8 @@ class StepEditor(tk.Toplevel):
                 self.master.log("Error: A primary target image must be selected for a conditional loop.")
                 return
 
-            if fallback_action_type == "Click" or fallback_action_type == "Click with Offset":
+
+            if fallback_action_type in ["Click", "Click with Offset"]:
                 if not fallback_target_name or "No templates" in fallback_target_name:
                     self.master.log(f"Error: A fallback target image must be selected for a '{fallback_action_type}' fallback action.")
                     return
@@ -967,14 +1031,18 @@ class StepEditor(tk.Toplevel):
                 "action_params": on_fail_params
             }
 
-            if fallback_action_type == "Click" or fallback_action_type == "Click with Offset":
+
+            if fallback_action_type in ["Click", "Click with Offset"]:
                 on_fail_dict["detection_mode"] = "Image"
                 on_fail_dict["detection_target"] = os.path.join("templates", fallback_target_name)
                 on_fail_dict["detection_target_name"] = fallback_target_name
-            else: # Click and Drag
+            else: # Click and Drag or Do Nothing
                 on_fail_dict["detection_mode"] = None
                 on_fail_dict["detection_target"] = None
                 on_fail_dict["detection_target_name"] = None
+                if fallback_action_type == "Do Nothing":
+                    on_fail_dict["action_params"] = {}
+
 
             step = {
                 "step_type": "conditional_loop",

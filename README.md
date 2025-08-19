@@ -5,8 +5,10 @@ A simple GUI application for creating automated bot scripts that can find images
 ## Features
 
 - **Action Sequencing:** Create a list of steps for the bot to follow in order.
+- **Save/Load Sequences:** Save your created action sequences to a file and load them back in later.
 - **Simple Actions:**
   - **Click:** Find a target (image or color) and click it.
+
   - **Click with Offset:** Find a target image and then click at a position relative to the center of that image, based on the X and Y offsets you provide.
   - **Type:** Find a target and then type a specified text string.
 - **Conditional Logic:**
@@ -26,10 +28,15 @@ A simple GUI application for creating automated bot scripts that can find images
 
 ## Changelog
 
-### v0.2 - (2025-08-17)
-- **Added Configurable Post-Action Wait Times:** Users can now add a fixed or random delay after each successful step to make automation appear more human-like.
-- **Added "Click with Offset" Action:** Allows clicking at a specified offset from a found image, useful for ambiguous buttons.
-- **Decoupled "Click and Drag" from Image Detection:** The "Click and Drag" fallback action now correctly uses the window center as its origin, not an image.
+
+### v0.2 - (2025-08-18)
+- **New Features and Enhancements.**
+- Added **Click with Offset** as a new action type for both simple and fallback actions.
+- Added a **Post-Action Wait** setting for each step, with options for "None," "Fixed," or "Random" delays.
+- Added **Do Nothing** as a new fallback action for conditional loops.
+- Implemented **Save and Load** functionality for action sequences.
+- The "Click and Drag" fallback action is now correctly based on the window center and does not require an image.
+
 
 ### v0.1 - (2025-08-16)
 - **Initial feature set and bug fixes.**
