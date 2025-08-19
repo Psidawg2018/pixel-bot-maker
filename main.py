@@ -56,6 +56,13 @@ class App(tk.Tk):
         # --- Sequence Editor UI ---
         sequence_frame = tk.LabelFrame(top_frame, text="Action Sequence", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
         sequence_frame.pack(fill="x", pady=10)
+
+        # Frame for Save/Load buttons
+        file_io_frame = tk.Frame(sequence_frame, bg=self.bg_color)
+        file_io_frame.pack(fill="x", pady=(0, 5))
+        tk.Button(file_io_frame, text="Load Sequence", command=self.load_sequence, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT).pack(side="left", padx=5)
+        tk.Button(file_io_frame, text="Save Sequence", command=self.save_sequence, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT).pack(side="left", padx=5)
+
         list_container = tk.Frame(sequence_frame, bg=self.bg_color)
         list_container.pack(fill="x")
         self.sequence_listbox = tk.Listbox(list_container, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, height=5)
@@ -69,12 +76,6 @@ class App(tk.Tk):
         self.edit_step_button.pack(pady=2, fill="x")
         self.remove_step_button = tk.Button(seq_button_frame, text="Remove", command=self.remove_step, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, state=tk.DISABLED)
         self.remove_step_button.pack(pady=2, fill="x")
-
-        # --- Save/Load Buttons ---
-        file_button_frame = tk.Frame(sequence_frame, bg=self.bg_color)
-        file_button_frame.pack(fill="x", pady=(5,0))
-        tk.Button(file_button_frame, text="Load Sequence", command=self.load_sequence, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT).pack(side="left", padx=5)
-        tk.Button(file_button_frame, text="Save Sequence", command=self.save_sequence, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT).pack(side="left", padx=5)
 
         # --- Final Controls ---
         controls_frame = tk.LabelFrame(self, text="Global Target", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
@@ -135,54 +136,6 @@ class App(tk.Tk):
         self.update_sequence_listbox()
         self.log(f"Removed step {index+1}.")
 
-    def save_sequence(self):
-        if not self.action_sequence:
-            self.log("Action sequence is empty. Nothing to save.")
-            return
-
-        filepath = filedialog.asksaveasfilename(
-            title="Save Sequence As...",
-            filetypes=(("JSON files", "*.json"), ("All files", "*.*")),
-            defaultextension=".json"
-        )
-
-        if not filepath:
-            self.log("Save operation cancelled.")
-            return
-
-        try:
-            with open(filepath, 'w') as f:
-                json.dump(self.action_sequence, f, indent=4)
-            self.log(f"Sequence saved to {filepath}")
-        except Exception as e:
-            self.log(f"Error saving sequence: {e}")
-
-    def load_sequence(self):
-        filepath = filedialog.askopenfilename(
-            title="Load Sequence From...",
-            filetypes=(("JSON files", "*.json"), ("All files", "*.*"))
-        )
-
-        if not filepath:
-            self.log("Load operation cancelled.")
-            return
-
-        try:
-            with open(filepath, 'r') as f:
-                loaded_sequence = json.load(f)
-
-            # Basic validation
-            if not isinstance(loaded_sequence, list):
-                raise ValueError("Loaded file is not a valid sequence list.")
-
-            self.action_sequence = loaded_sequence
-            self.update_sequence_listbox()
-            self.log(f"Sequence loaded from {filepath}")
-        except json.JSONDecodeError:
-            self.log("Error: The selected file is not a valid JSON file.")
-        except Exception as e:
-            self.log(f"Error loading sequence: {e}")
-
     def on_step_saved(self, step_data, index=None):
         if index is not None:
             self.action_sequence[index] = step_data
@@ -212,6 +165,53 @@ class App(tk.Tk):
             self.sequence_listbox.insert(tk.END, text)
         self.on_sequence_select(None)
 
+    def save_sequence(self):
+        if not self.action_sequence:
+            self.log("Cannot save an empty sequence.")
+            return
+
+        filepath = filedialog.asksaveasfilename(
+            parent=self,
+            title="Save Sequence",
+            filetypes=(("JSON files", "*.json"), ("All files", "*.*")),
+            defaultextension=".json"
+        )
+        if not filepath:
+            return
+
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(self.action_sequence, f, indent=4)
+            self.log(f"Sequence saved to {os.path.basename(filepath)}")
+        except Exception as e:
+            self.log(f"Error saving sequence: {e}")
+
+    def load_sequence(self):
+        filepath = filedialog.askopenfilename(
+            parent=self,
+            title="Load Sequence",
+            filetypes=(("JSON files", "*.json"), ("All files", "*.*"))
+        )
+        if not filepath:
+            return
+
+        try:
+            with open(filepath, 'r') as f:
+                loaded_sequence = json.load(f)
+
+            if not isinstance(loaded_sequence, list):
+                raise TypeError("File does not contain a valid sequence list.")
+
+            self.action_sequence = loaded_sequence
+            self.update_sequence_listbox()
+            self.log(f"Sequence loaded from {os.path.basename(filepath)}")
+        except json.JSONDecodeError:
+            self.log("Error: The selected file is not a valid JSON file.")
+        except TypeError as e:
+            self.log(f"Error loading sequence: {e}")
+        except Exception as e:
+            self.log(f"An unexpected error occurred while loading: {e}")
+
     def toggle_bot(self):
         if self.running:
             self.running = False
@@ -236,28 +236,6 @@ class App(tk.Tk):
             self.start_hotkey_listener()
             if self.hide_window_var.get():
                 self.withdraw()
-            self.run_scan_loop()
-
-    def _handle_post_action_wait(self, step):
-        wait_params = step.get('wait_params', {})
-        wait_type = wait_params.get('type', 'Fixed')
-        wait_duration = 0
-
-        if wait_type == 'Fixed':
-            wait_duration = wait_params.get('fixed_time', 1.0)
-        elif wait_type == 'Random':
-            min_time = wait_params.get('min_time', 1.0)
-            max_time = wait_params.get('max_time', 2.0)
-            wait_duration = random.uniform(min_time, max_time)
-
-        # The wait duration from config is in seconds. 'after' needs milliseconds.
-        wait_ms = int(wait_duration * 1000)
-
-        if wait_ms > 0:
-            self.log(f"Waiting for {wait_duration:.2f} seconds...")
-            self.scan_job = self.after(wait_ms, self.run_scan_loop)
-        else:
-            # If no wait, or wait is 0, proceed to the next step immediately.
             self.run_scan_loop()
 
     def run_scan_loop(self):
@@ -342,8 +320,8 @@ class App(tk.Tk):
 
             self.current_step_index += 1
             self.current_retry_count = 0 # Reset for next step
-            self.log("Action complete.")
-            self._handle_post_action_wait(step)
+            self.log("Action complete. Moving to next step in 1 second...")
+            self.scan_job = self.after(1000, self.run_scan_loop)
         else:
             self.log("Target not found. Re-scanning same step in 2 seconds...")
             self.scan_job = self.after(2000, self.run_scan_loop)
@@ -394,7 +372,7 @@ class App(tk.Tk):
             self.log("Primary target found! Proceeding to next step.")
             self.current_retry_count = 0
             self.current_step_index += 1
-            self._handle_post_action_wait(step)
+            self.scan_job = self.after(1000, self.run_scan_loop)
         else:
             # 3. If not found, perform fallback action.
             self.log("Primary target not found. Performing fallback action.")
@@ -416,7 +394,10 @@ class App(tk.Tk):
     def _perform_fallback_action(self, action_details, scan_region):
         action_type = action_details.get('action_type')
 
-        if action_type == "Click and Drag":
+        if action_type == "Do Nothing":
+            self.log("Fallback action: Doing nothing.")
+            return True
+        elif action_type == "Click and Drag":
             self.log("Fallback action: Performing 'Click and Drag'.")
             params = action_details.get('action_params', {})
             offset_x = params.get('drag_offset_x', 0)
@@ -431,9 +412,6 @@ class App(tk.Tk):
             click_and_drag(start_x, start_y, end_x, end_y)
             return True
 
-        elif action_type == "Do Nothing":
-            self.log("Fallback action: Doing nothing.")
-            return True
         elif action_type == "Click" or action_type == "Click with Offset":
             self.log(f"Fallback: Finding '{action_details.get('detection_target_name')}' for action '{action_type}'.")
             haystack_img = capture_screen(scan_region)
@@ -673,7 +651,7 @@ class StepEditor(tk.Toplevel):
         self.index = index
 
         self.title("Step Editor")
-        self.geometry("450x700") # Increased height for new options
+        self.geometry("450x650") # Increased height for new options
         self.configure(bg=self.master.bg_color)
         self.transient(self.master)
         self.grab_set()
@@ -688,10 +666,7 @@ class StepEditor(tk.Toplevel):
         self.simple_click_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_y', '0'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
         self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title.get() or ''))
-        if self.step_data.get('detection_mode') == 'Color':
-            self.target_color_bgr = self.step_data.get('detection_target', [0,0,255])
-        else:
-            self.target_color_bgr = [0,0,255] # Default value
+        self.target_color_bgr = self.step_data.get('detection_target', [0,0,255])
         self.template_var = tk.StringVar(value=os.path.basename(self.step_data.get('detection_target', '')) if self.step_data.get('detection_mode') == 'Image' else '')
 
         # Vars for Conditional Loop
@@ -705,7 +680,7 @@ class StepEditor(tk.Toplevel):
 
         # Vars for Post-Action Wait
         wait_params = self.step_data.get('wait_params', {})
-        self.wait_type = tk.StringVar(value=wait_params.get('type', 'Fixed'))
+        self.wait_type = tk.StringVar(value=wait_params.get('type', 'None'))
         self.fixed_wait = tk.StringVar(value=wait_params.get('fixed_time', '1.0'))
         self.min_wait = tk.StringVar(value=wait_params.get('min_time', '1.0'))
         self.max_wait = tk.StringVar(value=wait_params.get('max_time', '2.0'))
@@ -790,7 +765,6 @@ class StepEditor(tk.Toplevel):
 
         self.on_mode_change()
         self.on_action_change()
-        self._build_wait_ui(parent_frame).pack(pady=10, padx=10, fill="x")
 
     def build_conditional_loop_ui(self, parent_frame):
         # --- Loop Settings ---
@@ -811,10 +785,10 @@ class StepEditor(tk.Toplevel):
         # --- Fallback Action Type ---
         fallback_action_type_frame = tk.Frame(fallback_action_frame, bg=self.master.bg_color)
         tk.Label(fallback_action_type_frame, text="Action:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", pady=2, padx=5)
-        tk.Radiobutton(fallback_action_type_frame, text="Do Nothing", variable=self.fallback_action_type, value="Do Nothing", command=self.on_fallback_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
         tk.Radiobutton(fallback_action_type_frame, text="Click", variable=self.fallback_action_type, value="Click", command=self.on_fallback_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
         tk.Radiobutton(fallback_action_type_frame, text="Click with Offset", variable=self.fallback_action_type, value="Click with Offset", command=self.on_fallback_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
         tk.Radiobutton(fallback_action_type_frame, text="Click and Drag", variable=self.fallback_action_type, value="Click and Drag", command=self.on_fallback_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
+        tk.Radiobutton(fallback_action_type_frame, text="Do Nothing", variable=self.fallback_action_type, value="Do Nothing", command=self.on_fallback_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
         fallback_action_type_frame.pack(fill="x")
 
         # --- Fallback Action Params ---
@@ -836,7 +810,6 @@ class StepEditor(tk.Toplevel):
 
         self.update_conditional_template_lists()
         self.on_fallback_action_change()
-        self._build_wait_ui(parent_frame).pack(pady=10, padx=10, fill="x")
 
     def _build_image_selection_ui(self, parent, template_var, target_key):
         frame = tk.Frame(parent, bg=self.master.bg_color)
@@ -999,11 +972,10 @@ class StepEditor(tk.Toplevel):
                 self.master.log("Error: A primary target image must be selected for a conditional loop.")
                 return
 
-            if fallback_action_type == "Click" or fallback_action_type == "Click with Offset":
+            if fallback_action_type in ["Click", "Click with Offset"]:
                 if not fallback_target_name or "No templates" in fallback_target_name:
                     self.master.log(f"Error: A fallback target image must be selected for a '{fallback_action_type}' fallback action.")
                     return
-            # "Do Nothing" and "Click and Drag" do not require a fallback target.
 
             try:
                 max_retries = int(self.max_retries.get())
@@ -1029,7 +1001,7 @@ class StepEditor(tk.Toplevel):
                 "action_params": on_fail_params
             }
 
-            if fallback_action_type == "Click" or fallback_action_type == "Click with Offset":
+            if fallback_action_type in ["Click", "Click with Offset"]:
                 on_fail_dict["detection_mode"] = "Image"
                 on_fail_dict["detection_target"] = os.path.join("templates", fallback_target_name)
                 on_fail_dict["detection_target_name"] = fallback_target_name
@@ -1037,6 +1009,8 @@ class StepEditor(tk.Toplevel):
                 on_fail_dict["detection_mode"] = None
                 on_fail_dict["detection_target"] = None
                 on_fail_dict["detection_target_name"] = None
+                if fallback_action_type == "Do Nothing":
+                    on_fail_dict["action_params"] = {}
 
             step = {
                 "step_type": "conditional_loop",
@@ -1049,23 +1023,6 @@ class StepEditor(tk.Toplevel):
                 },
                 "on_fail": on_fail_dict
             }
-
-        # --- Save Wait Parameters ---
-        wait_type = self.wait_type.get()
-        wait_params = {'type': wait_type}
-        try:
-            if wait_type == 'Fixed':
-                wait_params['fixed_time'] = float(self.fixed_wait.get())
-            elif wait_type == 'Random':
-                wait_params['min_time'] = float(self.min_wait.get())
-                wait_params['max_time'] = float(self.max_wait.get())
-                if wait_params['min_time'] >= wait_params['max_time']:
-                    self.master.log("Error: Min wait time must be less than max wait time.")
-                    return
-        except ValueError:
-            self.master.log("Error: Wait times must be valid numbers.")
-            return
-        step['wait_params'] = wait_params
 
         self.master.on_step_saved(step, self.index)
         self.destroy()
