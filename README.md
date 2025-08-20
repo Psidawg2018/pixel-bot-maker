@@ -4,11 +4,12 @@ A simple GUI application for creating automated bot scripts that can find images
 
 ## Features
 
-- **Action Sequencing:** Create a list of steps for the bot to follow in order.
+- **Tabbed Interface:** The main window is organized into "Main" and "Settings" tabs for a cleaner user experience.
+- **Action Sequencing:** Create a list of steps for the bot to follow in order. You can easily reorder actions using "Move Up" and "Move Down" buttons.
 - **Save/Load Sequences:** Save your created action sequences to a file and load them back in later.
+- **Frequently Used List:** The top 3 most frequently loaded sequences are displayed on the main screen for quick one-click access.
 - **Simple Actions:**
   - **Click:** Find a target (image or color) and click it.
-
   - **Click with Offset:** Find a target image and then click at a position relative to the center of that image, based on the X and Y offsets you provide.
   - **Type:** Find a target and then type a specified text string.
 - **Conditional Logic:**
@@ -24,10 +25,30 @@ A simple GUI application for creating automated bot scripts that can find images
   - **Window Selector:** Select a specific application window for the bot to operate within.
   - **Image Template Manager:** Take screenshots of screen regions to use as image targets.
   - **Color Sampler:** An on-screen eyedropper tool to select a specific color to search for.
-- **Global Hotkey:** Press F9 to stop the bot at any time.
+- **Customization:**
+  - **Global Hotkey:** Customize the key used to start and stop the bot.
+  - **Themes:** Choose between a light or dark theme.
+  - **Defaults:** Set the default behavior for hiding the application window when the bot is running.
 
 ## Changelog
 
+### v0.5 - (2025-08-19)
+- **New Features and Settings.**
+- Added a **Settings Tab** to the main UI.
+- Implemented **Theme Selection** (Light/Dark). The application must be restarted for the theme to apply.
+- Implemented **Customizable Hotkeys**. Users can now set their own key to start/stop the bot.
+- Added a setting to control the **default state of the "Hide Bot" checkbox**.
+- Added a **"Frequently Used"** list to the main tab, showing the top 3 most loaded sequences for quick access.
+- All settings are now saved to a `settings.json` file and persist between sessions.
+
+### v0.4 - (2025-08-19)
+- **UI Enhancements.**
+- The "Step Editor" window has been made 25% wider to better accommodate complex step configurations.
+
+### v0.3 - (2025-08-19)
+- **Major GUI Refactor.**
+- The main window layout has been changed from a single column to a **two-column layout**, with controls on the left and the log on the right.
+- Added **"Move Up" and "Move Down" buttons** to the Action Sequence panel, allowing users to reorder steps.
 
 ### v0.2 - (2025-08-18)
 - **New Features and Enhancements.**
@@ -46,3 +67,70 @@ A simple GUI application for creating automated bot scripts that can find images
 - Fixed several UI bugs, including a crash in the Step Editor.
 - Added a splash screen to force window selection on startup.
 - Added `.gitignore` to exclude user-generated template files.
+
+## 🛣️ Roadmap
+
+### ✅ Completed (v0.1 – v0.5)
+- [x] Core action sequencer (click, type, click offset, drag, fallback logic)
+- [x] Conditional loops with fallback actions
+- [x] Save/load sequences
+- [x] Post-action wait (fixed/random)
+- [x] Frequently Used list
+- [x] GUI refinements (two-column layout, step reordering, theme selection, hotkeys, hide bot option)
+
+---
+
+### 🛠 v0.6 – Core Automation Expansion
+- [ ] Loop Controls: "Repeat X times" and "Loop until condition"
+- [ ] Screen Region Locking: Restrict actions to specific areas
+- [ ] Multiple Image Matching (OR logic in one step)
+- [ ] Image Similarity Threshold (fuzzy matching)
+- [ ] Keyboard Shortcuts: Key combos (Ctrl+Alt+Del, etc.)
+- [ ] Mouse Wheel Actions (scrolling support)
+- [ ] Right-click Actions
+
+---
+
+### ⚡ v0.7 – Logic & Intelligence
+- [ ] If/Else Chains (multi-branch logic)
+- [ ] Variable System: Simple text variables
+- [ ] Counter Variables (track action counts)
+- [ ] Time-based Conditions (scheduled logic)
+- [ ] Success/Failure Tracking (log pass/fail, allow retry/skip)
+- [ ] OCR Support (text recognition for UI elements)
+
+---
+
+### 🎨 v0.8 – User Experience Upgrade
+- [ ] Action Preview: Show where the bot will click before executing
+- [ ] Dry Run Mode (simulate sequence without actions)
+- [ ] Real-time Step Highlighting in the GUI
+- [ ] Undo/Redo for sequence editing
+- [ ] Action Templates (common sequences like login loops, farming cycles, scroll lists)
+- [ ] Emergency Stop Options (screen edge detection, mouse shake, etc.)
+
+---
+
+### 🔍 v0.9 – Debugging & Reliability
+- [ ] Detailed Action Logging (with timestamps and results)
+- [ ] Screenshot on Error (capture state when step fails)
+- [ ] Backup Sequences (auto-save every X minutes)
+- [ ] Configurable Error Handling: stop, retry, skip, or fallback sequence
+
+---
+
+### 🌐 v1.0 – Integration & Expansion
+- [ ] Command Line Interface (run sequences via CLI/batch files)
+- [ ] Built-in Scheduling (run sequences at set times)
+- [ ] External Triggers (file changes, network events, API calls)
+- [ ] Window Management (focus, minimize, maximize, switch between windows)
+- [ ] Cross-Window Support (multiple apps simultaneously)
+
+---
+
+### 🚀 Beyond v1.0 – Stretch Goals
+- [ ] AI-Assisted Image Recognition (robust matching for changed UI)
+- [ ] Macro Recording Mode (record user actions into sequences)
+- [ ] Plugin System / Scripting Hooks (Python/Lua for advanced logic)
+- [ ] Cloud Sequence Syncing & Sharing
+- [ ] Lightweight Mobile Companion (remote start/stop bots)
