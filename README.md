@@ -50,6 +50,13 @@ A simple GUI application for creating automated bot scripts that can find images
 - The main window layout has been changed from a single column to a **two-column layout**, with controls on the left and the log on the right.
 - Added **"Move Up" and "Move Down" buttons** to the Action Sequence panel, allowing users to reorder steps.
 
+### v0.4 - (2025-08-19)
+- **UI Improvement:** The Step Editor window has been made 25% wider to improve usability and provide more space for complex step configurations.
+
+### v0.3 - (2025-08-19)
+- **GUI Layout Overhaul:** The main window has been redesigned with a two-column layout. The log is now on the right side, providing more space for action sequences and controls on the left.
+- **Action Reordering:** Added "Move Up" and "Move Down" buttons to the sequence editor, allowing for easy reordering of actions.
+
 ### v0.2 - (2025-08-18)
 - **New Features and Enhancements.**
 - Added **Click with Offset** as a new action type for both simple and fallback actions.
@@ -57,7 +64,6 @@ A simple GUI application for creating automated bot scripts that can find images
 - Added **Do Nothing** as a new fallback action for conditional loops.
 - Implemented **Save and Load** functionality for action sequences.
 - The "Click and Drag" fallback action is now correctly based on the window center and does not require an image.
-
 
 ### v0.1 - (2025-08-16)
 - **Initial feature set and bug fixes.**
