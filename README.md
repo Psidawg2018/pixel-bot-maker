@@ -27,6 +27,7 @@ A simple GUI application for creating automated bot scripts that can find images
 - **Interactive Configuration:**
   - **Window Selector:** Select a specific application window for the bot to operate within.
   - **Image Template Manager:** Take screenshots of screen regions to use as image targets.
+  - **Multiple Image Matching:** For any image-based action, you can provide multiple template images. The bot will perform the action on the first one it finds (OR logic).
   - **Color Sampler:** An on-screen eyedropper tool to select a specific color to search for.
 - **Customization:**
   - **Global Hotkey:** Customize the key used to start and stop the bot.
@@ -36,11 +37,12 @@ A simple GUI application for creating automated bot scripts that can find images
 ## Changelog
 
 ### v0.6 - (2025-08-20)
-- **Loop Controls.**
+- **Loop Controls & Multi-Image Matching.**
 - Implemented a new **Loop** step type with two modes:
   - **Repeat X Times**: Executes a sequence of sub-actions a specified number of times.
   - **Until Condition Met**: Executes sub-actions until a specific image is found on screen. This includes a configurable retry limit to prevent infinite loops.
 - The Step Editor now supports creating and editing nested actions within these loops.
+- Added **Multiple Image Matching** (OR Logic). Any step that searches for an image can now be given multiple templates. The bot will act on the first one it finds.
 
 ### v0.5 - (2025-08-19)
 - **New Features and Settings.**
@@ -87,12 +89,13 @@ A simple GUI application for creating automated bot scripts that can find images
 - [x] Frequently Used list
 - [x] GUI refinements (two-column layout, step reordering, theme selection, hotkeys, hide bot option)
 - [x] Loop Controls: "Repeat X times" and "Loop until condition"
+- [x] Multiple Image Matching (OR logic in one step)
+
 
 ---
 
 ### 🛠 v0.6 – Core Automation Expansion
 - [ ] Screen Region Locking: Restrict actions to specific areas
-- [ ] Multiple Image Matching (OR logic in one step)
 - [ ] Image Similarity Threshold (fuzzy matching)
 - [ ] Keyboard Shortcuts: Key combos (Ctrl+Alt+Del, etc.)
 - [ ] Mouse Wheel Actions (scrolling support)

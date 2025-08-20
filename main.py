@@ -548,7 +548,6 @@ class App(tk.Tk):
                 self.log(f"  - Condition check attempt {i+1}/{max_retries}...")
                 haystack_img = capture_screen(scan_region)
                 try:
-
                     targets = step['loop_condition_target']
                     if isinstance(targets, str): targets = [targets]
                     needle_imgs = [cv2.imread(p, cv2.IMREAD_UNCHANGED) for p in targets]
@@ -596,7 +595,6 @@ class App(tk.Tk):
                 target_pos = locations[0]
         elif action_step['detection_mode'] == "Image":
             try:
-
                 targets = action_step['detection_target']
                 if isinstance(targets, str): # Backward compatibility
                     targets = [targets]
@@ -616,7 +614,6 @@ class App(tk.Tk):
                 target_pos = find_image(haystack_img, needle_imgs)
             except Exception as e:
                 self.log(f"    - Error during image search: {e}")
-
                 return False
 
         if target_pos:
@@ -1451,6 +1448,7 @@ class StepEditor(tk.Toplevel):
             self.until_frame.pack(fill="x")
 
 
+
     def on_step_type_change(self):
         step_type = self.step_type.get()
         # Hide all frames first
@@ -1600,7 +1598,6 @@ class StepEditor(tk.Toplevel):
                 except ValueError:
                     self.master.log("Error: Max retries must be an integer.")
                     return
-
 
                 condition_target_names = list(self.until_image_listbox.get(0, tk.END))
                 if not condition_target_names:
