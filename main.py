@@ -548,6 +548,7 @@ class App(tk.Tk):
                 self.log(f"  - Condition check attempt {i+1}/{max_retries}...")
                 haystack_img = capture_screen(scan_region)
                 try:
+
                     targets = step['loop_condition_target']
                     if isinstance(targets, str): targets = [targets]
                     needle_imgs = [cv2.imread(p, cv2.IMREAD_UNCHANGED) for p in targets]
@@ -595,6 +596,7 @@ class App(tk.Tk):
                 target_pos = locations[0]
         elif action_step['detection_mode'] == "Image":
             try:
+
                 targets = action_step['detection_target']
                 if isinstance(targets, str): # Backward compatibility
                     targets = [targets]
@@ -614,6 +616,7 @@ class App(tk.Tk):
                 target_pos = find_image(haystack_img, needle_imgs)
             except Exception as e:
                 self.log(f"    - Error during image search: {e}")
+
                 return False
 
         if target_pos:
@@ -1332,6 +1335,122 @@ class StepEditor(tk.Toplevel):
             self.until_frame.pack(fill="x")
 
 
+    def build_loop_ui(self, parent_frame):
+        # --- Loop Mode ---
+        loop_mode_frame = tk.LabelFrame(parent_frame, text="Loop Mode", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        loop_mode_frame.pack(pady=5, padx=10, fill="x")
+        tk.Radiobutton(loop_mode_frame, text="Repeat X Times", variable=self.loop_mode, value="repeat", command=self.on_loop_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
+        tk.Radiobutton(loop_mode_frame, text="Until Condition Met", variable=self.loop_mode, value="until", command=self.on_loop_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(side="left")
+
+        # --- Loop Settings ---
+        self.loop_settings_frame = tk.Frame(parent_frame, bg=self.master.bg_color)
+        self.loop_settings_frame.pack(pady=5, padx=10, fill="x")
+
+        self.repeat_frame = tk.Frame(self.loop_settings_frame, bg=self.master.bg_color)
+        tk.Label(self.repeat_frame, text="Repetitions:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(self.repeat_frame, textvariable=self.loop_repeat_count, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=5).pack(side="left")
+
+        self.until_frame = tk.Frame(self.loop_settings_frame, bg=self.master.bg_color)
+        tk.Label(self.until_frame, text="Condition (Image):", bg=self.master.bg_color, fg=self.master.text_color).pack(anchor="w", padx=5)
+        self.until_condition_dropdown = self._build_image_selection_ui(self.until_frame, self.loop_until_template_var, "until_condition")
+
+        max_retries_frame = tk.Frame(self.until_frame, bg=self.master.bg_color)
+        max_retries_frame.pack(fill="x", pady=2)
+        tk.Label(max_retries_frame, text="Max Retries:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(max_retries_frame, textvariable=self.loop_max_retries, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=5).pack(side="left")
+
+        # --- Actions Frame ---
+        actions_frame = tk.LabelFrame(parent_frame, text="Actions to Loop", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        actions_frame.pack(pady=5, padx=10, fill="both", expand=True)
+
+        list_container = tk.Frame(actions_frame, bg=self.master.bg_color)
+        list_container.pack(fill="both", expand=True)
+
+        self.loop_actions_listbox = tk.Listbox(list_container, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, height=6)
+        self.loop_actions_listbox.pack(side="left", fill="both", expand=True)
+        self.loop_actions_listbox.bind("<<ListboxSelect>>", self.on_loop_action_select)
+
+        seq_button_frame = tk.Frame(list_container, bg=self.master.bg_color)
+        seq_button_frame.pack(side="left", padx=(5,0), fill="y")
+
+        tk.Button(seq_button_frame, text="Add", command=self._add_loop_action, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(pady=2, fill="x")
+        self.edit_loop_action_button = tk.Button(seq_button_frame, text="Edit", command=self._edit_loop_action, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, state=tk.DISABLED)
+        self.edit_loop_action_button.pack(pady=2, fill="x")
+        self.remove_loop_action_button = tk.Button(seq_button_frame, text="Remove", command=self._remove_loop_action, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, state=tk.DISABLED)
+        self.remove_loop_action_button.pack(pady=2, fill="x")
+
+        # Disable loop/conditional step types if this is a sub-editor
+        if self.is_sub_editor:
+            self.step_type_radios['loop'].config(state=tk.DISABLED)
+            self.step_type_radios['conditional_loop'].config(state=tk.DISABLED)
+            self.step_type.set('simple') # Default to simple action for sub-steps
+
+
+        self.on_loop_mode_change()
+        self._update_loop_actions_listbox()
+
+    def _add_loop_action(self):
+        StepEditor(
+            master=self.master,
+            target_sequence_list=self.loop_actions,
+            on_save_callback=self._update_loop_actions_listbox,
+            is_sub_editor=True
+        )
+
+    def _edit_loop_action(self):
+        selected_indices = self.loop_actions_listbox.curselection()
+        if not selected_indices:
+            return
+        index = selected_indices[0]
+        step_data = self.loop_actions[index]
+
+        StepEditor(
+            master=self.master,
+            step_data=step_data,
+            index=index,
+            target_sequence_list=self.loop_actions,
+            on_save_callback=self._update_loop_actions_listbox,
+            is_sub_editor=True
+        )
+
+    def _remove_loop_action(self):
+        selected_indices = self.loop_actions_listbox.curselection()
+        if not selected_indices:
+            return
+        index = selected_indices[0]
+        self.loop_actions.pop(index)
+        self._update_loop_actions_listbox()
+        self.master.log(f"Removed sub-action {index+1}.")
+
+    def on_loop_action_select(self, event):
+        selected_indices = self.loop_actions_listbox.curselection()
+        if selected_indices:
+            self.edit_loop_action_button.config(state=tk.NORMAL)
+            self.remove_loop_action_button.config(state=tk.NORMAL)
+        else:
+            self.edit_loop_action_button.config(state=tk.DISABLED)
+            self.remove_loop_action_button.config(state=tk.DISABLED)
+
+    def _update_loop_actions_listbox(self):
+        self.loop_actions_listbox.delete(0, tk.END)
+        for i, step in enumerate(self.loop_actions):
+            # This is a simplified representation. We can enhance it later.
+            action = step.get('action_type', '?')
+            target = step.get('detection_target_name', 'Unknown')
+            text = f"{i+1}: {action} on '{target}'"
+            self.loop_actions_listbox.insert(tk.END, text)
+
+
+    def on_loop_mode_change(self):
+        mode = self.loop_mode.get()
+        if mode == 'repeat':
+            self.repeat_frame.pack(fill="x")
+            self.until_frame.pack_forget()
+        else: # until
+            self.repeat_frame.pack_forget()
+            self.until_frame.pack(fill="x")
+
+
     def on_step_type_change(self):
         step_type = self.step_type.get()
         # Hide all frames first
@@ -1481,6 +1600,7 @@ class StepEditor(tk.Toplevel):
                 except ValueError:
                     self.master.log("Error: Max retries must be an integer.")
                     return
+
 
                 condition_target_names = list(self.until_image_listbox.get(0, tk.END))
                 if not condition_target_names:
