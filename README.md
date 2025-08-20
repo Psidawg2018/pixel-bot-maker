@@ -36,6 +36,14 @@ A simple GUI application for creating automated bot scripts that can find images
 
 ## Changelog
 
+### v0.6.1 - (2025-08-20)
+- **Critical Bug Fixes & Stability.**
+- Fixed a critical crash (`AttributeError`) that occurred when creating or editing "Conditional Loop" and "Loop" steps.
+- The underlying cause was an incomplete refactoring, which led to inconsistent UI and broken save logic.
+- Standardized the image selection UI in the Step Editor to consistently use a multi-select listbox.
+- Completely rewrote the save logic for "Conditional Loop" and "Loop" steps to be more robust and bug-free.
+- Removed significant amounts of dead code and unused variables from the `StepEditor`.
+
 ### v0.6 - (2025-08-20)
 - **Loop Controls & Multi-Image Matching.**
 - Implemented a new **Loop** step type with two modes:
