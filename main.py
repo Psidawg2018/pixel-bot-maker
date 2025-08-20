@@ -83,10 +83,8 @@ class App(tk.Tk):
 
         # --- Main Tab Content ---
         # --- Sequence Editor UI ---
-
         sequence_frame = tk.LabelFrame(main_tab, text="Action Sequence", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
         sequence_frame.pack(fill="x", pady=(10, 10), padx=10)
-
 
         # Frame for Save/Load buttons
         file_io_frame = tk.Frame(sequence_frame, bg=self.bg_color)
@@ -119,7 +117,6 @@ class App(tk.Tk):
         self.target_window_label = tk.Label(controls_frame, textvariable=self.target_window_title, bg=self.widget_bg_color, fg=self.text_color, wraplength=380, justify="left")
         self.target_window_label.pack(pady=5, fill="x")
         tk.Button(controls_frame, text="Change Target Window", command=self.prompt_for_window_selection, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT).pack(pady=(0,5))
-
 
         # --- Most Loaded Sequences ---
         most_loaded_frame = tk.LabelFrame(main_tab, text="Frequently Used", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
@@ -176,7 +173,6 @@ class App(tk.Tk):
         wait_frame = tk.LabelFrame(settings_content_frame, text="Default Wait Times (Coming Soon)", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
         wait_frame.pack(fill="x", pady=5, anchor="n")
         tk.Label(wait_frame, text="Configuration for default wait times will be added here.", bg=self.bg_color, fg=self.text_color, wraplength=350, justify="left").pack(pady=10, padx=5)
-
 
         self.log("Welcome! Please select a target window to begin.")
         self.update_most_loaded_list()
