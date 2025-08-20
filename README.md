@@ -91,6 +91,7 @@ A simple GUI application for creating automated bot scripts that can find images
 - [x] Loop Controls: "Repeat X times" and "Loop until condition"
 - [x] Multiple Image Matching (OR logic in one step)
 
+
 ---
 
 ### 🛠 v0.6 – Core Automation Expansion
