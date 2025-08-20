@@ -4,8 +4,10 @@ A simple GUI application for creating automated bot scripts that can find images
 
 ## Features
 
-- **Action Sequencing:** Create a list of steps for the bot to follow in order.
+- **Tabbed Interface:** The main window is organized into "Main" and "Settings" tabs for a cleaner user experience.
+- **Action Sequencing:** Create a list of steps for the bot to follow in order. You can easily reorder actions using "Move Up" and "Move Down" buttons.
 - **Save/Load Sequences:** Save your created action sequences to a file and load them back in later.
+- **Frequently Used List:** The top 3 most frequently loaded sequences are displayed on the main screen for quick one-click access.
 - **Simple Actions:**
   - **Click:** Find a target (image or color) and click it.
   - **Click with Offset:** Find a target image and then click at a position relative to the center of that image, based on the X and Y offsets you provide.
@@ -23,9 +25,30 @@ A simple GUI application for creating automated bot scripts that can find images
   - **Window Selector:** Select a specific application window for the bot to operate within.
   - **Image Template Manager:** Take screenshots of screen regions to use as image targets.
   - **Color Sampler:** An on-screen eyedropper tool to select a specific color to search for.
-- **Global Hotkey:** Press F9 to stop the bot at any time.
+- **Customization:**
+  - **Global Hotkey:** Customize the key used to start and stop the bot.
+  - **Themes:** Choose between a light or dark theme.
+  - **Defaults:** Set the default behavior for hiding the application window when the bot is running.
 
 ## Changelog
+
+### v0.5 - (2025-08-19)
+- **New Features and Settings.**
+- Added a **Settings Tab** to the main UI.
+- Implemented **Theme Selection** (Light/Dark). The application must be restarted for the theme to apply.
+- Implemented **Customizable Hotkeys**. Users can now set their own key to start/stop the bot.
+- Added a setting to control the **default state of the "Hide Bot" checkbox**.
+- Added a **"Frequently Used"** list to the main tab, showing the top 3 most loaded sequences for quick access.
+- All settings are now saved to a `settings.json` file and persist between sessions.
+
+### v0.4 - (2025-08-19)
+- **UI Enhancements.**
+- The "Step Editor" window has been made 25% wider to better accommodate complex step configurations.
+
+### v0.3 - (2025-08-19)
+- **Major GUI Refactor.**
+- The main window layout has been changed from a single column to a **two-column layout**, with controls on the left and the log on the right.
+- Added **"Move Up" and "Move Down" buttons** to the Action Sequence panel, allowing users to reorder steps.
 
 ### v0.4 - (2025-08-19)
 - **UI Improvement:** The Step Editor window has been made 25% wider to improve usability and provide more space for complex step configurations.

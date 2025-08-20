@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import scrolledtext, colorchooser, filedialog
+from tkinter import scrolledtext, colorchooser, filedialog, ttk
 import time
 import json
 import random
@@ -16,20 +16,25 @@ from PIL import Image, ImageTk
 from screen_capture import capture_screen
 from image_analyzer import find_color, find_image
 from automation import click_at, type_text, click_and_drag
+from settings_manager import SettingsManager
 
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Pixel Bot")
+        self.settings_manager = SettingsManager()
         self.geometry("800x600")
 
         # --- Color Theme ---
-        self.bg_color = "#2C3E50"
-        self.widget_bg_color = "#34495E"
-        self.text_color = "#ECF0F1"
-        self.button_color = "#3498DB"
-        self.button_text_color = "#ECF0F1"
-
+        self.dark_theme = {
+            "bg_color": "#2C3E50", "widget_bg_color": "#34495E", "text_color": "#ECF0F1",
+            "button_color": "#3498DB", "button_text_color": "#ECF0F1"
+        }
+        self.light_theme = {
+            "bg_color": "#ECECEC", "widget_bg_color": "#FFFFFF", "text_color": "#000000",
+            "button_color": "#007BFF", "button_text_color": "#FFFFFF"
+        }
+        self._configure_theme()
         self.configure(bg=self.bg_color)
 
         # --- App State ---
@@ -39,7 +44,7 @@ class App(tk.Tk):
         self.action_sequence = []
         self.current_step_index = 0
         self.current_retry_count = 0
-        self.hide_window_var = tk.BooleanVar(value=True)
+        self.hide_window_var = tk.BooleanVar(value=self.settings_manager.get_setting('hide_bot_default'))
         self.target_window_title = tk.StringVar()
         self.target_window_title.set("") # Set to empty string initially
 
@@ -62,11 +67,25 @@ class App(tk.Tk):
         self.log_area.pack(fill="both", expand=True)
 
         # --- WIDGET CREATION (Left Panel) ---
-        # No more top_frame, widgets are packed directly into left_frame
+        self.style = ttk.Style()
+        self.style.theme_use('default')
+        self.style.configure('TNotebook', background=self.bg_color, borderwidth=0)
+        self.style.configure('TNotebook.Tab', background=self.bg_color, foreground=self.text_color, lightcolor=self.widget_bg_color, borderwidth=2)
+        self.style.map('TNotebook.Tab', background=[('selected', self.widget_bg_color)], foreground=[('selected', self.text_color)])
 
+        notebook = ttk.Notebook(left_frame, style='TNotebook')
+        notebook.pack(expand=True, fill='both')
+
+        main_tab = tk.Frame(notebook, bg=self.bg_color)
+        settings_tab = tk.Frame(notebook, bg=self.bg_color)
+        notebook.add(main_tab, text='Main')
+        notebook.add(settings_tab, text='Settings')
+
+        # --- Main Tab Content ---
         # --- Sequence Editor UI ---
-        sequence_frame = tk.LabelFrame(left_frame, text="Action Sequence", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
-        sequence_frame.pack(fill="x", pady=(0, 10), padx=10)
+
+        sequence_frame = tk.LabelFrame(main_tab, text="Action Sequence", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
+        sequence_frame.pack(fill="x", pady=(10, 10), padx=10)
 
 
         # Frame for Save/Load buttons
@@ -94,14 +113,21 @@ class App(tk.Tk):
         self.remove_step_button.pack(pady=2, fill="x")
 
         # --- Final Controls ---
-        controls_frame = tk.LabelFrame(left_frame, text="Global Target", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
+        controls_frame = tk.LabelFrame(main_tab, text="Global Target", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
         controls_frame.pack(pady=10, padx=10, fill="x")
 
         self.target_window_label = tk.Label(controls_frame, textvariable=self.target_window_title, bg=self.widget_bg_color, fg=self.text_color, wraplength=380, justify="left")
         self.target_window_label.pack(pady=5, fill="x")
         tk.Button(controls_frame, text="Change Target Window", command=self.prompt_for_window_selection, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT).pack(pady=(0,5))
 
-        bot_controls_frame = tk.Frame(left_frame, bg=self.bg_color)
+
+        # --- Most Loaded Sequences ---
+        most_loaded_frame = tk.LabelFrame(main_tab, text="Frequently Used", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
+        most_loaded_frame.pack(pady=10, padx=10, fill="x")
+        self.most_loaded_container = tk.Frame(most_loaded_frame, bg=self.bg_color)
+        self.most_loaded_container.pack(fill="x", pady=5)
+
+        bot_controls_frame = tk.Frame(main_tab, bg=self.bg_color)
         bot_controls_frame.pack(pady=10, padx=10, fill="x", side="bottom")
 
         self.hide_window_check = tk.Checkbutton(bot_controls_frame, text="Hide window when bot is running", variable=self.hide_window_var, bg=self.bg_color, fg=self.text_color, selectcolor=self.widget_bg_color, activebackground=self.bg_color, activeforeground=self.text_color)
@@ -110,8 +136,61 @@ class App(tk.Tk):
         self.start_button = tk.Button(bot_controls_frame, text="Start Bot", command=self.toggle_bot, bg=self.button_color, fg=self.button_text_color, activebackground="#2980B9", activeforeground=self.text_color, relief=tk.FLAT, padx=10, pady=5)
         self.start_button.pack(pady=10)
 
+        # --- Settings Tab Content ---
+        settings_content_frame = tk.Frame(settings_tab, bg=self.bg_color)
+        settings_content_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # --- General Settings ---
+        general_frame = tk.LabelFrame(settings_content_frame, text="General", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
+        general_frame.pack(fill="x", pady=5, anchor="n")
+
+        self.hide_bot_default_var = tk.BooleanVar(value=self.settings_manager.get_setting('hide_bot_default'))
+        hide_bot_check = tk.Checkbutton(general_frame, text="Hide window by default when bot is running", variable=self.hide_bot_default_var, bg=self.bg_color, fg=self.text_color, selectcolor=self.widget_bg_color, activebackground=self.bg_color, activeforeground=self.text_color, command=self.save_hide_bot_default)
+        hide_bot_check.pack(anchor="w", padx=5, pady=2)
+
+        # --- Appearance Settings ---
+        theme_frame = tk.LabelFrame(settings_content_frame, text="Appearance", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
+        theme_frame.pack(fill="x", pady=5, anchor="n")
+
+        self.theme_var = tk.StringVar(value=self.settings_manager.get_setting('theme'))
+        theme_label = tk.Label(theme_frame, text="Theme:", bg=self.bg_color, fg=self.text_color)
+        theme_label.pack(side="left", padx=5)
+        dark_radio = tk.Radiobutton(theme_frame, text="Dark", variable=self.theme_var, value="dark", bg=self.bg_color, fg=self.text_color, selectcolor=self.widget_bg_color, command=self.apply_theme)
+        dark_radio.pack(side="left")
+        light_radio = tk.Radiobutton(theme_frame, text="Light", variable=self.theme_var, value="light", bg=self.bg_color, fg=self.text_color, selectcolor=self.widget_bg_color, command=self.apply_theme)
+        light_radio.pack(side="left")
+
+        # --- Hotkey Settings ---
+        hotkey_frame = tk.LabelFrame(settings_content_frame, text="Hotkey", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
+        hotkey_frame.pack(fill="x", pady=5, anchor="n")
+
+        hotkey_inner_frame = tk.Frame(hotkey_frame, bg=self.bg_color)
+        hotkey_inner_frame.pack(fill="x", pady=2)
+        tk.Label(hotkey_inner_frame, text="Start/Stop Hotkey:", bg=self.bg_color, fg=self.text_color).pack(side="left", padx=5)
+        self.hotkey_label_var = tk.StringVar(value=self.settings_manager.get_setting('hotkey'))
+        tk.Label(hotkey_inner_frame, textvariable=self.hotkey_label_var, bg=self.widget_bg_color, fg=self.text_color, padx=10, width=12, anchor="center").pack(side="left")
+        self.change_hotkey_button = tk.Button(hotkey_inner_frame, text="Change...", command=self.change_hotkey, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT)
+        self.change_hotkey_button.pack(side="left", padx=5)
+
+        # Placeholder for Default Wait Times UI
+        wait_frame = tk.LabelFrame(settings_content_frame, text="Default Wait Times (Coming Soon)", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
+        wait_frame.pack(fill="x", pady=5, anchor="n")
+        tk.Label(wait_frame, text="Configuration for default wait times will be added here.", bg=self.bg_color, fg=self.text_color, wraplength=350, justify="left").pack(pady=10, padx=5)
+
+
         self.log("Welcome! Please select a target window to begin.")
+        self.update_most_loaded_list()
         self.after(200, lambda: self.prompt_for_window_selection(is_splash=True))
+
+    def _configure_theme(self):
+        theme = self.settings_manager.get_setting('theme')
+        colors = self.dark_theme if theme == 'dark' else self.light_theme
+
+        self.bg_color = colors['bg_color']
+        self.widget_bg_color = colors['widget_bg_color']
+        self.text_color = colors['text_color']
+        self.button_color = colors['button_color']
+        self.button_text_color = colors['button_text_color']
 
     def prompt_for_window_selection(self, is_splash=False):
         self.log("Prompting for target window selection...")
@@ -245,12 +324,35 @@ class App(tk.Tk):
         except Exception as e:
             self.log(f"Error saving sequence: {e}")
 
-    def load_sequence(self):
-        filepath = filedialog.askopenfilename(
-            parent=self,
-            title="Load Sequence",
-            filetypes=(("JSON files", "*.json"), ("All files", "*.*"))
-        )
+    def update_most_loaded_list(self):
+        # Clear existing labels
+        for widget in self.most_loaded_container.winfo_children():
+            widget.destroy()
+        most_loaded = self.settings_manager.get_most_loaded_sequences(count=3)
+
+        if not most_loaded:
+            tk.Label(self.most_loaded_container, text="No sequences loaded yet.", bg=self.bg_color, fg=self.text_color, anchor="w").pack(fill="x", pady=2)
+            return
+
+        for filepath, count in most_loaded:
+            # Shorten the display name
+            display_name = os.path.basename(filepath)
+
+            # Create a clickable label
+            label_text = f"  {display_name} ({count} loads)"
+            label = tk.Label(self.most_loaded_container, text=label_text, bg=self.widget_bg_color, fg=self.text_color, anchor="w", padx=5, cursor="hand2")
+            label.pack(fill="x", pady=(0, 2))
+            label.bind("<Button-1>", lambda e, path=filepath: self.load_sequence(path))
+            label.bind("<Enter>", lambda e: e.widget.config(bg=self.button_color))
+            label.bind("<Leave>", lambda e: e.widget.config(bg=self.widget_bg_color))
+
+    def load_sequence(self, filepath=None):
+        if filepath is None:
+            filepath = filedialog.askopenfilename(
+                parent=self,
+                title="Load Sequence",
+                filetypes=(("JSON files", "*.json"), ("All files", "*.*"))
+            )
         if not filepath:
             return
 
@@ -264,12 +366,60 @@ class App(tk.Tk):
             self.action_sequence = loaded_sequence
             self.update_sequence_listbox()
             self.log(f"Sequence loaded from {os.path.basename(filepath)}")
+
+            # Increment load count and update the list
+            self.settings_manager.increment_sequence_load_count(filepath)
+            self.update_most_loaded_list()
         except json.JSONDecodeError:
             self.log("Error: The selected file is not a valid JSON file.")
         except TypeError as e:
             self.log(f"Error loading sequence: {e}")
         except Exception as e:
             self.log(f"An unexpected error occurred while loading: {e}")
+
+    def save_hide_bot_default(self):
+        self.settings_manager.set_setting('hide_bot_default', self.hide_bot_default_var.get())
+        self.log("Default 'Hide Bot' setting saved.")
+
+    def apply_theme(self):
+        theme = self.theme_var.get()
+        self.settings_manager.set_setting('theme', theme)
+        self.log("Theme changed. Please restart the application for the changes to take full effect.")
+
+    def change_hotkey(self):
+        HotkeyChangeDialog(self)
+
+    def start_hotkey_listener(self):
+        if self.hotkey_listener:
+            self.hotkey_listener.stop()
+
+        hotkey_str = self.settings_manager.get_setting('hotkey')
+        target_key = None
+
+        try:
+            if hasattr(keyboard.Key, hotkey_str.lower()):
+                target_key = getattr(keyboard.Key, hotkey_str.lower())
+            elif len(hotkey_str) == 1:
+                target_key = keyboard.KeyCode.from_char(hotkey_str)
+        except Exception as e:
+            self.log(f"Error parsing hotkey '{hotkey_str}': {e}. Defaulting to F9.")
+            target_key = keyboard.Key.f9
+            self.hotkey_label_var.set("f9")
+            self.settings_manager.set_setting('hotkey', "f9")
+
+        if target_key is None:
+            self.log(f"Invalid hotkey '{hotkey_str}'. Please set a valid key. Defaulting to F9.")
+            target_key = keyboard.Key.f9
+            self.hotkey_label_var.set("f9")
+            self.settings_manager.set_setting('hotkey', "f9")
+
+        def on_press(key):
+            if key == target_key:
+                self.after(0, self.toggle_bot)
+
+        self.hotkey_listener = keyboard.Listener(on_press=on_press)
+        self.hotkey_listener.start()
+        self.log(f"Bot running... Press '{hotkey_str.upper()}' to stop.")
 
     def toggle_bot(self):
         if self.running:
@@ -530,16 +680,6 @@ class App(tk.Tk):
 
         self.log(f"Unknown fallback action type: {action_type}")
         return False
-
-    def start_hotkey_listener(self):
-        if self.hotkey_listener: return
-        def on_press(key):
-            if key == keyboard.Key.f9:
-                self.after(0, self.toggle_bot)
-        self.hotkey_listener = keyboard.Listener(on_press=on_press)
-        listener_thread = threading.Thread(target=self.hotkey_listener.run, daemon=True)
-        listener_thread.start()
-        self.log("Bot running... Press F9 to stop.")
 
     def log(self, message):
         timestamp = time.strftime("%H:%M:%S")
@@ -1199,6 +1339,54 @@ class StepEditor(tk.Toplevel):
                 self.template_var.set(templates[0])
         else:
             self.template_var.set("No templates found")
+
+class HotkeyChangeDialog(tk.Toplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.master = master
+        self.title("Set Hotkey")
+        self.geometry("300x150")
+        self.configure(bg=self.master.bg_color)
+        self.transient(self.master)
+        self.grab_set()
+
+        self.hotkey_str = tk.StringVar(value="Press any key...")
+
+        tk.Label(self, text="Press any key to set it as the new hotkey.", bg=self.master.bg_color, fg=self.master.text_color, wraplength=280).pack(pady=10)
+        tk.Label(self, textvariable=self.hotkey_str, bg=self.master.widget_bg_color, fg=self.master.text_color, width=20, font=("Arial", 12)).pack(pady=10)
+        tk.Button(self, text="Cancel", command=self.on_close, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(pady=10)
+
+        self.listener = keyboard.Listener(on_press=self.on_key_press, suppress=True)
+        self.listener.start()
+
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def on_key_press(self, key):
+        try:
+            key_name = None
+            if isinstance(key, keyboard.Key):
+                key_name = key.name
+            elif isinstance(key, keyboard.KeyCode):
+                key_name = key.char
+
+            if key_name:
+                self.hotkey_str.set(key_name)
+                self.master.settings_manager.set_setting('hotkey', key_name)
+                self.master.hotkey_label_var.set(key_name)
+                self.master.log(f"Hotkey changed to: {key_name}")
+                # Restart the main listener if it's running
+                if self.master.hotkey_listener:
+                    self.master.hotkey_listener.stop()
+                    self.master.start_hotkey_listener()
+        except Exception as e:
+            self.master.log(f"Could not set hotkey: {e}")
+        finally:
+            self.after(100, self.on_close)
+
+    def on_close(self):
+        if self.listener.running:
+            self.listener.stop()
+        self.destroy()
 
 if __name__ == "__main__":
     app = App()
