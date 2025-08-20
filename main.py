@@ -734,7 +734,7 @@ class StepEditor(tk.Toplevel):
         self.index = index
 
         self.title("Step Editor")
-        self.geometry("450x700") # Increased height for new options
+        self.geometry("563x700") # Increased height for new options
         self.configure(bg=self.master.bg_color)
         self.transient(self.master)
         self.grab_set()
