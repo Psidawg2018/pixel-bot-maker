@@ -12,7 +12,10 @@ A simple GUI application for creating automated bot scripts that can find images
   - **Click:** Find a target (image or color) and click it.
   - **Click with Offset:** Find a target image and then click at a position relative to the center of that image, based on the X and Y offsets you provide.
   - **Type:** Find a target and then type a specified text string.
-- **Conditional Logic:**
+- **Loop Controls:**
+  - **Repeat X Times:** Create a loop that executes a sequence of sub-actions a specified number of times.
+  - **Loop Until Condition:** Create a loop that executes a sequence of sub-actions until a specific image appears on the screen. This loop includes a configurable retry limit to prevent infinite execution.
+- **Conditional Logic (Legacy):**
   - **Conditional Loops:** Create complex steps that will try to find a primary image target. If the target isn't found, it can perform a fallback action.
   #### Fallback Actions
   - **Click**: This action requires a secondary image target. If the primary target is not found, the bot will search for this secondary target and click on it.
@@ -31,6 +34,13 @@ A simple GUI application for creating automated bot scripts that can find images
   - **Defaults:** Set the default behavior for hiding the application window when the bot is running.
 
 ## Changelog
+
+### v0.6 - (2025-08-20)
+- **Loop Controls.**
+- Implemented a new **Loop** step type with two modes:
+  - **Repeat X Times**: Executes a sequence of sub-actions a specified number of times.
+  - **Until Condition Met**: Executes sub-actions until a specific image is found on screen. This includes a configurable retry limit to prevent infinite loops.
+- The Step Editor now supports creating and editing nested actions within these loops.
 
 ### v0.5 - (2025-08-19)
 - **New Features and Settings.**
@@ -69,18 +79,18 @@ A simple GUI application for creating automated bot scripts that can find images
 
 ## 🛣️ Roadmap
 
-### ✅ Completed (v0.1 – v0.5)
+### ✅ Completed (v0.1 – v0.6)
 - [x] Core action sequencer (click, type, click offset, drag, fallback logic)
 - [x] Conditional loops with fallback actions
 - [x] Save/load sequences
 - [x] Post-action wait (fixed/random)
 - [x] Frequently Used list
 - [x] GUI refinements (two-column layout, step reordering, theme selection, hotkeys, hide bot option)
+- [x] Loop Controls: "Repeat X times" and "Loop until condition"
 
 ---
 
 ### 🛠 v0.6 – Core Automation Expansion
-- [ ] Loop Controls: "Repeat X times" and "Loop until condition"
 - [ ] Screen Region Locking: Restrict actions to specific areas
 - [ ] Multiple Image Matching (OR logic in one step)
 - [ ] Image Similarity Threshold (fuzzy matching)
