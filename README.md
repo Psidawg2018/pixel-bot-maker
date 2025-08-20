@@ -58,7 +58,6 @@ A simple GUI application for creating automated bot scripts that can find images
 - Implemented **Save and Load** functionality for action sequences.
 - The "Click and Drag" fallback action is now correctly based on the window center and does not require an image.
 
-
 ### v0.1 - (2025-08-16)
 - **Initial feature set and bug fixes.**
 - Implemented core action sequencer.
