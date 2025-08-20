@@ -39,33 +39,40 @@ def find_text(image):
     text = pytesseract.image_to_string(gray_image)
     return text.strip()
 
-def find_image(haystack_img, needle_img, threshold=0.8):
+def find_image(haystack_img, needle_imgs, threshold=0.8):
     """
-    Finds a smaller image (needle) within a larger image (haystack).
+    Finds the best match for a list of smaller images (needles) within a larger image (haystack).
 
     :param haystack_img: The larger image to search within.
-    :param needle_img: The smaller template image to find.
+    :param needle_imgs: A list of smaller template images to find.
     :param threshold: The confidence threshold for a match (0.0 to 1.0).
-    :return: A tuple (x, y) of the center of the found match, or None.
+    :return: A tuple (x, y) of the center of the best found match, or None.
     """
-    # Convert images to grayscale for template matching
     haystack_gray = cv2.cvtColor(haystack_img, cv2.COLOR_BGR2GRAY)
-    needle_gray = cv2.cvtColor(needle_img, cv2.COLOR_BGR2GRAY)
 
-    # Get dimensions of the needle
-    needle_w, needle_h = needle_gray.shape[::-1]
+    best_match = {
+        'max_val': -1,
+        'center_x': -1,
+        'center_y': -1
+    }
 
-    # Perform template matching
-    res = cv2.matchTemplate(haystack_gray, needle_gray, cv2.TM_CCOEFF_NORMED)
+    for needle_img in needle_imgs:
+        if needle_img is None:
+            continue
 
-    # Find the best match
-    _, max_val, _, max_loc = cv2.minMaxLoc(res)
+        needle_gray = cv2.cvtColor(needle_img, cv2.COLOR_BGR2GRAY)
+        needle_w, needle_h = needle_gray.shape[::-1]
 
-    if max_val >= threshold:
-        # Calculate the center of the found region
-        center_x = max_loc[0] + needle_w // 2
-        center_y = max_loc[1] + needle_h // 2
-        return (center_x, center_y)
+        res = cv2.matchTemplate(haystack_gray, needle_gray, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, max_loc = cv2.minMaxLoc(res)
+
+        if max_val > best_match['max_val']:
+            best_match['max_val'] = max_val
+            best_match['center_x'] = max_loc[0] + needle_w // 2
+            best_match['center_y'] = max_loc[1] + needle_h // 2
+
+    if best_match['max_val'] >= threshold:
+        return (best_match['center_x'], best_match['center_y'])
 
     return None
 
@@ -128,22 +135,24 @@ if __name__ == '__main__':
     print("\n--- Testing find_image ---")
     # Create a high-contrast haystack image
     haystack = np.ones((300, 300, 3), np.uint8) * 255 # White background
-    # Create a smaller needle image
-    needle = np.zeros((50, 50, 3), np.uint8) # Black square
+    # Create two smaller needle images
+    needle1 = np.zeros((50, 50, 3), np.uint8) # Black square
+    needle2 = np.ones((25, 25, 3), np.uint8) * 128 # Grey square
 
-    # Place the needle inside the haystack at a known location
+    # Place needle1 inside the haystack at a known location
     needle_x, needle_y = 100, 150
-    haystack[needle_y:needle_y+50, needle_x:needle_x+50] = needle
+    haystack[needle_y:needle_y+50, needle_x:needle_x+50] = needle1
 
-    print(f"Searching for a 50x50 black square inside a 300x300 white image.")
-    location = find_image(haystack.copy(), needle.copy(), threshold=0.95)
+    print(f"Searching for a black square and a grey square inside a white image.")
+    print("Only the black square is present.")
+    location = find_image(haystack.copy(), [needle1.copy(), needle2.copy()], threshold=0.95)
 
     if location:
-        print(f"SUCCESS: Found image at {location}.")
+        print(f"SUCCESS: Found an image at {location}.")
         expected_x, expected_y = needle_x + 25, needle_y + 25
         if location == (expected_x, expected_y):
-            print("SUCCESS: Location is correct.")
+            print("SUCCESS: Location is correct (it found the black square).")
         else:
             print(f"FAILURE: Location is incorrect. Expected ({expected_x}, {expected_y}).")
     else:
-        print("FAILURE: Did not find the image.")
+        print("FAILURE: Did not find any of the images.")
