@@ -1159,7 +1159,16 @@ class StepEditor(tk.Toplevel):
             self.target_color_bgr = self.step_data.get('detection_target', [0,0,255])
         else:
             self.target_color_bgr = [0,0,255] # Default value
-        self.template_var = tk.StringVar(value=os.path.basename(self.step_data.get('detection_target', '')) if self.step_data.get('detection_mode') == 'Image' else '')
+        # This var is legacy, from before multi-image support. It's not actively used, but we'll initialize it safely.
+        detection_target = self.step_data.get('detection_target')
+        initial_template_name = ''
+        if self.step_data.get('detection_mode') == 'Image' and detection_target:
+            if isinstance(detection_target, list):
+                if detection_target: # Ensure list is not empty
+                    initial_template_name = os.path.basename(detection_target[0])
+            elif isinstance(detection_target, str):
+                initial_template_name = os.path.basename(detection_target)
+        self.template_var = tk.StringVar(value=initial_template_name)
 
         # Vars for Conditional Loop
         self.max_retries = tk.StringVar(value=self.step_data.get('max_retries', '5'))
