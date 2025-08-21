@@ -137,7 +137,9 @@ if __name__ == '__main__':
     haystack = np.ones((300, 300, 3), np.uint8) * 255 # White background
     # Create two smaller needle images
     needle1 = np.zeros((50, 50, 3), np.uint8) # Black square
+    needle1[1,1] = 1 # Make it non-uniform to avoid matchTemplate issues
     needle2 = np.ones((25, 25, 3), np.uint8) * 128 # Grey square
+    needle2[1,1] = 127 # Make it non-uniform
 
     # Place needle1 inside the haystack at a known location
     needle_x, needle_y = 100, 150
