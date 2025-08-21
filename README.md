@@ -27,6 +27,7 @@ A simple GUI application for creating automated bot scripts that can find images
 - **Interactive Configuration:**
   - **Window Selector:** Select a specific application window for the bot to operate within.
   - **Image Template Manager:** Take screenshots of screen regions to use as image targets.
+  - **Screen Region Locking:** For any action, you can define a specific rectangular area within the target window to search for the image or color. This is useful for focusing actions on a smaller part of a large application window, improving both speed and reliability.
   - **Multiple Image Matching:** For any image-based action, you can provide multiple template images. The bot will perform the action on the first one it finds (OR logic).
   - **Color Sampler:** An on-screen eyedropper tool to select a specific color to search for.
 - **Customization:**
@@ -42,6 +43,11 @@ A simple GUI application for creating automated bot scripts that can find images
 - Added a new **Image Similarity Threshold** slider to the Settings tab.
 - This allows users to control the strictness of image matching, enabling "fuzzy" searches.
 - The setting is saved and persists between application sessions.
+
+### v0.7.0 - (2025-08-20)
+- **Screen Region Locking & Bug Fix.**
+- **New Feature**: Added **Screen Region Locking**. Users can now define a specific sub-region within a target window for an action to search in. This greatly improves performance and reliability when working with large or complex application windows.
+- **Bug Fix**: The core image-finding logic is now color-sensitive. Previously, it converted images to grayscale, which could lead to incorrect matches (e.g., finding a blue button when searching for a red one). The matching algorithm now correctly uses color information and handles templates with transparency.
 
 ### v0.6.1 - (2025-08-20)
 - **Critical Bug Fixes & Stability.**
@@ -106,12 +112,12 @@ A simple GUI application for creating automated bot scripts that can find images
 - [x] Loop Controls: "Repeat X times" and "Loop until condition"
 - [x] Multiple Image Matching (OR logic in one step)
 - [x] Image Similarity Threshold (fuzzy matching)
+- [x] Screen Region Locking: Restrict actions to specific areas
 
 
 ---
 
 ### 🛠 v0.6 – Core Automation Expansion
-- [ ] Screen Region Locking: Restrict actions to specific areas
 - [ ] Keyboard Shortcuts: Key combos (Ctrl+Alt+Del, etc.)
 - [ ] Mouse Wheel Actions (scrolling support)
 - [ ] Right-click Actions

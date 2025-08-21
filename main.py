@@ -549,7 +549,21 @@ class App(tk.Tk):
                 self.scan_job = self.after(2000, self.run_scan_loop)
                 return
             target_window = target_windows[0]
+            # Default scan region is the entire window
             scan_region = {'top': target_window.top, 'left': target_window.left, 'width': target_window.width, 'height': target_window.height}
+
+            # If a specific search region is defined for the step, use it instead
+            if step.get('search_region'):
+                custom_region = step['search_region']
+                # The custom region coords are relative to the window, so we add the window's top-left corner
+                scan_region = {
+                    'top': target_window.top + custom_region['y'],
+                    'left': target_window.left + custom_region['x'],
+                    'width': custom_region['width'],
+                    'height': custom_region['height']
+                }
+                self.log(f"Using custom scan region: {scan_region}")
+
         except Exception as e:
             self.log(f"Error getting window details: {e}. Stopping bot.")
             self.toggle_bot()
@@ -701,7 +715,21 @@ class App(tk.Tk):
                 self.scan_job = self.after(2000, self.run_scan_loop)
                 return
             target_window = target_windows[0]
+            # Default scan region is the entire window
             scan_region = {'top': target_window.top, 'left': target_window.left, 'width': target_window.width, 'height': target_window.height}
+
+            # If a specific search region is defined for the step, use it instead
+            if step.get('search_region'):
+                custom_region = step['search_region']
+                # The custom region coords are relative to the window, so we add the window's top-left corner
+                scan_region = {
+                    'top': target_window.top + custom_region['y'],
+                    'left': target_window.left + custom_region['x'],
+                    'width': custom_region['width'],
+                    'height': custom_region['height']
+                }
+                self.log(f"Using custom scan region for loop: {scan_region}")
+
         except Exception as e:
             self.log(f"Error getting window details: {e}. Stopping bot.")
             self.toggle_bot()
@@ -737,7 +765,21 @@ class App(tk.Tk):
                 self.scan_job = self.after(2000, self.run_scan_loop)
                 return
             target_window = target_windows[0]
+            # Default scan region is the entire window
             scan_region = {'top': target_window.top, 'left': target_window.left, 'width': target_window.width, 'height': target_window.height}
+
+            # If a specific search region is defined for the step, use it instead
+            if step.get('search_region'):
+                custom_region = step['search_region']
+                # The custom region coords are relative to the window, so we add the window's top-left corner
+                scan_region = {
+                    'top': target_window.top + custom_region['y'],
+                    'left': target_window.left + custom_region['x'],
+                    'width': custom_region['width'],
+                    'height': custom_region['height']
+                }
+                self.log(f"Using custom scan region for conditional loop: {scan_region}")
+
         except Exception as e:
             self.log(f"Error getting window details: {e}. Stopping bot.")
             self.toggle_bot()
@@ -980,6 +1022,58 @@ class ScreenshotTaker(tk.Toplevel):
         self.destroy()
 
 
+class RegionSelector(tk.Toplevel):
+    def __init__(self, master, callback):
+        super().__init__(master)
+        self.master = master
+        self.callback = callback
+        self.start_x = None
+        self.start_y = None
+        self.rect = None
+
+        self.attributes('-fullscreen', True)
+        self.attributes('-alpha', 0.3)
+        self.attributes('-topmost', True)
+        self.transient(master)
+        self.grab_set()
+
+        self.canvas = tk.Canvas(self, cursor="cross")
+        self.canvas.pack(fill="both", expand=True)
+
+        self.canvas.bind("<ButtonPress-1>", self.on_button_press)
+        self.canvas.bind("<B1-Motion>", self.on_mouse_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_button_release)
+        self.canvas.bind("<Escape>", lambda e: self.destroy())
+
+    def on_button_press(self, event):
+        self.start_x = self.canvas.canvasx(event.x)
+        self.start_y = self.canvas.canvasy(event.y)
+        if not self.rect:
+            self.rect = self.canvas.create_rectangle(self.start_x, self.start_y, self.start_x, self.start_y, outline='green', width=2)
+
+    def on_mouse_drag(self, event):
+        cur_x = self.canvas.canvasx(event.x)
+        cur_y = self.canvas.canvasy(event.y)
+        self.canvas.coords(self.rect, self.start_x, self.start_y, cur_x, cur_y)
+
+    def on_button_release(self, event):
+        end_x = self.canvas.canvasx(event.x)
+        end_y = self.canvas.canvasy(event.y)
+
+        if abs(end_x - self.start_x) < 5 or abs(end_y - self.start_y) < 5:
+            self.destroy()
+            return
+
+        x = int(min(self.start_x, end_x))
+        y = int(min(self.start_y, end_y))
+        width = int(abs(end_x - self.start_x))
+        height = int(abs(end_y - self.start_y))
+
+        region = {'x': x, 'y': y, 'width': width, 'height': height}
+        self.callback(region)
+        self.destroy()
+
+
 class ColorSampler(tk.Toplevel):
     def __init__(self, master):
         super().__init__(master)
@@ -1055,6 +1149,8 @@ class StepEditor(tk.Toplevel):
         self.simple_click_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_y', '0'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
         self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title.get() or ''))
+        self.search_region = tk.Variable(value=self.step_data.get('search_region'))
+        self.search_region_label_var = tk.StringVar(value=self._get_region_display_text())
         if self.step_data.get('detection_mode') == 'Color':
             self.target_color_bgr = self.step_data.get('detection_target', [0,0,255])
         else:
@@ -1131,7 +1227,15 @@ class StepEditor(tk.Toplevel):
         tk.Button(window_frame, text="Select...", command=self.select_window, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left")
         if not self.target_window_title.get(): self.target_window_title.set("(None Selected)")
 
-        mode_frame = tk.LabelFrame(parent_frame, text="2. Choose What to Look For", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        region_frame = tk.LabelFrame(parent_frame, text="2. Set Search Region (Optional)", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        region_frame.pack(pady=10, padx=10, fill="x")
+        self.region_label = tk.Label(region_frame, textvariable=self.search_region_label_var, bg=self.master.widget_bg_color, fg=self.master.text_color, wraplength=350)
+        self.region_label.pack(side="left", fill="x", expand=True, padx=5)
+        tk.Button(region_frame, text="Set Region", command=self.set_search_region, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left", padx=(0, 5))
+        tk.Button(region_frame, text="Clear", command=self.clear_search_region, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left")
+
+
+        mode_frame = tk.LabelFrame(parent_frame, text="3. Choose What to Look For", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         mode_frame.pack(pady=10, padx=10, fill="x")
         tk.Radiobutton(mode_frame, text="Color", variable=self.detection_mode, value="Color", command=self.on_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(mode_frame, text="Image", variable=self.detection_mode, value="Image", command=self.on_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
@@ -1480,7 +1584,8 @@ class StepEditor(tk.Toplevel):
                 "action_type": self.action_type.get(),
                 "action_params": {},
                 "detection_target": None,
-                "detection_target_name": ""
+                "detection_target_name": "",
+                "search_region": self.search_region.get()
             }
 
             action_type = step['action_type']
@@ -1518,7 +1623,8 @@ class StepEditor(tk.Toplevel):
                 "step_type": "loop",
                 "loop_mode": self.loop_mode.get(),
                 "loop_actions": self.loop_actions,
-                "window_title": self.target_window_title.get()
+                "window_title": self.target_window_title.get(),
+                "search_region": self.search_region.get()
             }
             if step['loop_mode'] == 'repeat':
                 step['loop_repeat_count'] = repeat_count
@@ -1590,7 +1696,8 @@ class StepEditor(tk.Toplevel):
                 "window_title": self.target_window_title.get(),
                 "max_retries": max_retries,
                 "primary_target": primary_target_dict,
-                "on_fail": on_fail_dict
+                "on_fail": on_fail_dict,
+                "search_region": self.search_region.get()
             }
 
         # --- Save Wait Parameters ---
@@ -1661,6 +1768,41 @@ class StepEditor(tk.Toplevel):
 
             except Exception as e:
                 self.master.log(f"Error saving template: {e}")
+
+    def _get_region_display_text(self):
+        region = self.search_region.get()
+        if region:
+            return f"Region set: X={region['x']}, Y={region['y']}, W={region['width']}, H={region['height']}"
+        return "Not set. The entire target window will be searched."
+
+    def set_search_region(self):
+        self.master.log("Opening region selector...")
+        RegionSelector(self, self.on_region_selected)
+
+    def on_region_selected(self, region):
+        # The region coordinates are relative to the screen. We need to make them
+        # relative to the target window if a window is selected.
+        try:
+            target_window_title = self.target_window_title.get()
+            if target_window_title and target_window_title != "(None Selected)":
+                target_windows = gw.getWindowsWithTitle(target_window_title)
+                if target_windows:
+                    win = target_windows[0]
+                    region['x'] -= win.left
+                    region['y'] -= win.top
+                    self.master.log(f"Region coordinates adjusted to be relative to window '{win.title}'.")
+
+        except Exception as e:
+            self.master.log(f"Could not adjust region to window: {e}. Using absolute coordinates.")
+
+        self.search_region.set(region)
+        self.search_region_label_var.set(self._get_region_display_text())
+        self.master.log(f"Search region set.")
+
+    def clear_search_region(self):
+        self.search_region.set(None)
+        self.search_region_label_var.set(self._get_region_display_text())
+        self.master.log("Search region has been cleared.")
 
     def _add_image_template_to_listbox(self, listbox):
         filepaths = filedialog.askopenfilenames(
