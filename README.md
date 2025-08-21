@@ -38,16 +38,16 @@ A simple GUI application for creating automated bot scripts that can find images
 
 ## Changelog
 
+### v0.6.3 - (2025-08-20)
+- **Screen Region Locking & Bug Fix.**
+- **New Feature**: Added **Screen Region Locking**. Users can now define a specific sub-region within a target window for an action to search in. This greatly improves performance and reliability when working with large or complex application windows.
+- **Bug Fix**: The core image-finding logic is now color-sensitive. Previously, it converted images to grayscale, which could lead to incorrect matches (e.g., finding a blue button when searching for a red one). The matching algorithm now correctly uses color information and handles templates with transparency.
+
 ### v0.6.2 - (2025-08-20)
 - **Image Similarity Threshold.**
 - Added a new **Image Similarity Threshold** slider to the Settings tab.
 - This allows users to control the strictness of image matching, enabling "fuzzy" searches.
 - The setting is saved and persists between application sessions.
-
-### v0.7.0 - (2025-08-20)
-- **Screen Region Locking & Bug Fix.**
-- **New Feature**: Added **Screen Region Locking**. Users can now define a specific sub-region within a target window for an action to search in. This greatly improves performance and reliability when working with large or complex application windows.
-- **Bug Fix**: The core image-finding logic is now color-sensitive. Previously, it converted images to grayscale, which could lead to incorrect matches (e.g., finding a blue button when searching for a red one). The matching algorithm now correctly uses color information and handles templates with transparency.
 
 ### v0.6.1 - (2025-08-20)
 - **Critical Bug Fixes & Stability.**
