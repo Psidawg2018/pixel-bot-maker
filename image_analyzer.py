@@ -42,37 +42,58 @@ def find_text(image):
 def find_image(haystack_img, needle_imgs, threshold=0.8):
     """
     Finds the best match for a list of smaller images (needles) within a larger image (haystack).
+    This version is color-sensitive and handles transparency in needle images.
+    It uses normalized squared difference, where a lower value indicates a better match.
 
-    :param haystack_img: The larger image to search within.
-    :param needle_imgs: A list of smaller template images to find.
+    :param haystack_img: The larger image to search within (BGR).
+    :param needle_imgs: A list of smaller template images to find (BGRA or BGR).
     :param threshold: The confidence threshold for a match (0.0 to 1.0).
+                      Note: For this method, a value closer to 0 is a better match.
+                      The threshold is inverted internally to a 'match quality' score.
     :return: A tuple (x, y) of the center of the best found match, or None.
     """
-    haystack_gray = cv2.cvtColor(haystack_img, cv2.COLOR_BGR2GRAY)
-
     best_match = {
-        'max_val': -1,
-        'center_x': -1,
-        'center_y': -1
+        'min_val': float('inf'), # Lower is better for TM_SQDIFF_NORMED
+        'max_loc': None,
+        'found_needle_w': 0,
+        'found_needle_h': 0
     }
 
     for needle_img in needle_imgs:
         if needle_img is None:
             continue
 
-        needle_gray = cv2.cvtColor(needle_img, cv2.COLOR_BGR2GRAY)
-        needle_w, needle_h = needle_gray.shape[::-1]
+        needle_h, needle_w = needle_img.shape[:2]
 
-        res = cv2.matchTemplate(haystack_gray, needle_gray, cv2.TM_CCOEFF_NORMED)
-        _, max_val, _, max_loc = cv2.minMaxLoc(res)
+        # Ensure haystack is not smaller than needle
+        if haystack_img.shape[0] < needle_h or haystack_img.shape[1] < needle_w:
+            continue
 
-        if max_val > best_match['max_val']:
-            best_match['max_val'] = max_val
-            best_match['center_x'] = max_loc[0] + needle_w // 2
-            best_match['center_y'] = max_loc[1] + needle_h // 2
+        # Check if needle has an alpha channel
+        if needle_img.shape[2] == 4:
+            needle_bgr = needle_img[:, :, :3]
+            mask = needle_img[:, :, 3]
+            # The mask requires TM_SQDIFF or TM_CCORR_NORMED.
+            # TM_SQDIFF_NORMED is excellent for color matching.
+            res = cv2.matchTemplate(haystack_img, needle_bgr, cv2.TM_SQDIFF_NORMED, mask=mask)
+        else:
+            res = cv2.matchTemplate(haystack_img, needle_img, cv2.TM_SQDIFF_NORMED)
 
-    if best_match['max_val'] >= threshold:
-        return (best_match['center_x'], best_match['center_y'])
+        min_val, _, min_loc, _ = cv2.minMaxLoc(res)
+
+        if min_val < best_match['min_val']:
+            best_match['min_val'] = min_val
+            best_match['min_loc'] = min_loc
+            best_match['found_needle_w'] = needle_w
+            best_match['found_needle_h'] = needle_h
+
+    # For TM_SQDIFF_NORMED, a value of 0 is a perfect match.
+    # We invert the logic: a match is good if min_val is *below* (1 - threshold).
+    match_quality = 1 - best_match['min_val']
+    if match_quality >= threshold:
+        center_x = best_match['min_loc'][0] + best_match['found_needle_w'] // 2
+        center_y = best_match['min_loc'][1] + best_match['found_needle_h'] // 2
+        return (center_x, center_y)
 
     return None
 
@@ -131,30 +152,65 @@ if __name__ == '__main__':
     else:
         print("FAILURE: Extracted text does not match.")
 
-    # --- Test 3: find_image ---
-    print("\n--- Testing find_image ---")
-    # Create a high-contrast haystack image
-    haystack = np.ones((300, 300, 3), np.uint8) * 255 # White background
-    # Create two smaller needle images
-    needle1 = np.zeros((50, 50, 3), np.uint8) # Black square
-    needle1[1,1] = 1 # Make it non-uniform to avoid matchTemplate issues
-    needle2 = np.ones((25, 25, 3), np.uint8) * 128 # Grey square
-    needle2[1,1] = 127 # Make it non-uniform
-
-    # Place needle1 inside the haystack at a known location
+    # --- Test 3: find_image (Basic) ---
+    print("\n--- Testing find_image (Basic) ---")
+    haystack_basic = np.ones((300, 300, 3), np.uint8) * 255
+    needle_basic = np.zeros((50, 50, 3), np.uint8)
+    needle_basic[1, 1] = 1
     needle_x, needle_y = 100, 150
-    haystack[needle_y:needle_y+50, needle_x:needle_x+50] = needle1
-
-    print(f"Searching for a black square and a grey square inside a white image.")
-    print("Only the black square is present.")
-    location = find_image(haystack.copy(), [needle1.copy(), needle2.copy()], threshold=0.95)
-
+    haystack_basic[needle_y:needle_y+50, needle_x:needle_x+50] = needle_basic
+    print("Searching for a black square in a white image.")
+    location = find_image(haystack_basic.copy(), [needle_basic.copy()], threshold=0.95)
     if location:
-        print(f"SUCCESS: Found an image at {location}.")
         expected_x, expected_y = needle_x + 25, needle_y + 25
         if location == (expected_x, expected_y):
-            print("SUCCESS: Location is correct (it found the black square).")
+            print("SUCCESS: Basic image found at the correct location.")
         else:
-            print(f"FAILURE: Location is incorrect. Expected ({expected_x}, {expected_y}).")
+            print(f"FAILURE: Basic image found at incorrect location. Got {location}, expected ({expected_x}, {expected_y}).")
     else:
-        print("FAILURE: Did not find any of the images.")
+        print("FAILURE: Basic image not found.")
+
+    # --- Test 4: find_image (Color-Sensitivity) ---
+    print("\n--- Testing find_image (Color-Sensitivity) ---")
+    haystack_color = np.ones((300, 300, 3), np.uint8) * 255 # White background
+    # Create a blue square and a red square
+    blue_square = np.array([[[255, 0, 0]] * 50] * 50, dtype=np.uint8)
+    red_square = np.array([[[0, 0, 255]] * 50] * 50, dtype=np.uint8)
+    # Place them in the haystack
+    haystack_color[50:100, 50:100] = blue_square
+    haystack_color[150:200, 150:200] = red_square
+    # The needle is the red square
+    needle_color = red_square.copy()
+    print("Searching for a red square in an image containing a blue and a red square.")
+    location_color = find_image(haystack_color, [needle_color], threshold=0.95)
+    if location_color:
+        expected_color_x, expected_color_y = 150 + 25, 150 + 25
+        if location_color == (expected_color_x, expected_color_y):
+            print("SUCCESS: Correctly found the red square, ignoring the blue one.")
+        else:
+            print(f"FAILURE: Found an object, but at the wrong location: {location_color}. Expected the red square at ({expected_color_x}, {expected_color_y}).")
+    else:
+        print("FAILURE: Did not find the red square.")
+
+    # --- Test 5: find_image (Transparency) ---
+    print("\n--- Testing find_image (Transparency) ---")
+    haystack_trans = np.ones((300, 300, 3), np.uint8) * 255
+    # Create a transparent needle (BGRA) with a green circle
+    needle_trans = np.zeros((100, 100, 4), dtype=np.uint8)
+    cv2.circle(needle_trans, (50, 50), 40, (0, 255, 0, 255), -1) # Green circle, fully opaque
+    # Place a green circle on the haystack
+    cv2.circle(haystack_trans, (150, 150), 40, (0, 255, 0), -1)
+    print("Searching for a green circle using a template with transparency.")
+    location_trans = find_image(haystack_trans, [needle_trans], threshold=0.95)
+    if location_trans:
+        # The center of the circle in the haystack is (150, 150)
+        # The location returned is the center of the matched bounding box.
+        # Since the needle is 100x100, the top-left is at (100, 100).
+        # The center of the match should be 100 + 100/2 = 150.
+        expected_trans_x, expected_trans_y = 150, 150
+        if abs(location_trans[0] - expected_trans_x) < 2 and abs(location_trans[1] - expected_trans_y) < 2:
+             print("SUCCESS: Correctly found the circle using a transparent needle.")
+        else:
+            print(f"FAILURE: Found circle at the wrong location: {location_trans}. Expected ({expected_trans_x}, {expected_trans_y}).")
+    else:
+        print("FAILURE: Did not find the circle using the transparent needle.")
