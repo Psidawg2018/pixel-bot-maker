@@ -15,7 +15,7 @@ import cv2
 from PIL import Image, ImageTk
 from screen_capture import capture_screen
 from image_analyzer import find_color, find_image
-from automation import click_at, right_click_at, type_text, click_and_drag
+from automation import click_at, right_click_at, type_text, click_and_drag, scroll_wheel
 from settings_manager import SettingsManager
 
 class App(tk.Tk):
@@ -696,6 +696,11 @@ class App(tk.Tk):
                 text = action_params.get('text', '')
                 self.log(f"    - Performing action: Type '{text}'")
                 type_text(text)
+            elif action_type == "Scroll":
+                direction = action_params.get('scroll_direction', 'Down')
+                amount = action_params.get('scroll_amount', 5)
+                self.log(f"    - Performing action: Scroll {direction} by {amount}")
+                scroll_wheel(direction.lower(), amount)
 
             # Sub-actions have waits too
             self._handle_post_action_wait(action_step)
@@ -852,6 +857,13 @@ class App(tk.Tk):
             click_and_drag(start_x, start_y, end_x, end_y)
             return True
 
+        elif action_type == "Scroll":
+            params = action_details.get('action_params', {})
+            direction = params.get('scroll_direction', 'Down')
+            amount = params.get('scroll_amount', 5)
+            self.log(f"Fallback action: Scrolling {direction} by {amount}")
+            scroll_wheel(direction.lower(), amount)
+            return True
         elif action_type == "Click" or action_type == "Click with Offset":
             self.log(f"Fallback: Finding '{action_details.get('detection_target_name')}' for action '{action_type}'.")
             haystack_img = capture_screen(scan_region)
@@ -1151,6 +1163,8 @@ class StepEditor(tk.Toplevel):
         self.simple_click_offset_x = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_x', '0'))
         self.simple_click_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_y', '0'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
+        self.scroll_direction = tk.StringVar(value=self.step_data.get('action_params', {}).get('scroll_direction', 'Down'))
+        self.scroll_amount = tk.StringVar(value=self.step_data.get('action_params', {}).get('scroll_amount', '5'))
         self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title.get() or ''))
 
         self.search_region = self.step_data.get('search_region') # This is now a direct attribute
@@ -1282,6 +1296,7 @@ class StepEditor(tk.Toplevel):
         tk.Radiobutton(action_frame, text="Right-click", variable=self.action_type, value="Right-click", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Click with Offset", variable=self.action_type, value="Click with Offset", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Type", variable=self.action_type, value="Type", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Scroll", variable=self.action_type, value="Scroll", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
 
         self.type_entry_frame = tk.Frame(action_frame, bg=self.master.bg_color)
         self.type_entry = tk.Entry(self.type_entry_frame, textvariable=self.text_to_type, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT)
@@ -1296,6 +1311,16 @@ class StepEditor(tk.Toplevel):
         tk.Label(simple_offset_y_frame, text="Y Offset:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
         tk.Entry(simple_offset_y_frame, textvariable=self.simple_click_offset_y, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
         simple_offset_y_frame.pack(fill="x", pady=2)
+
+        self.scroll_frame = tk.Frame(action_frame, bg=self.master.bg_color)
+        scroll_direction_frame = tk.Frame(self.scroll_frame, bg=self.master.bg_color)
+        tk.Label(scroll_direction_frame, text="Direction:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.OptionMenu(scroll_direction_frame, self.scroll_direction, "Down", "Up").pack(side="left")
+        scroll_direction_frame.pack(fill="x", pady=2)
+        scroll_amount_frame = tk.Frame(self.scroll_frame, bg=self.master.bg_color)
+        tk.Label(scroll_amount_frame, text="Amount:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(scroll_amount_frame, textvariable=self.scroll_amount, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+        scroll_amount_frame.pack(fill="x", pady=2)
 
         self.on_mode_change()
         self.on_action_change()
@@ -1525,15 +1550,16 @@ class StepEditor(tk.Toplevel):
 
     def on_action_change(self):
         action = self.action_type.get()
+        self.type_entry_frame.pack_forget()
+        self.simple_offset_frame.pack_forget()
+        self.scroll_frame.pack_forget()
+
         if action == "Type":
             self.type_entry_frame.pack(fill="x", padx=5, pady=2)
-            self.simple_offset_frame.pack_forget()
         elif action == "Click with Offset":
-            self.type_entry_frame.pack_forget()
             self.simple_offset_frame.pack(fill="x", padx=15, pady=2)
-        else:  # Click or Right-click
-            self.type_entry_frame.pack_forget()
-            self.simple_offset_frame.pack_forget()
+        elif action == "Scroll":
+            self.scroll_frame.pack(fill="x", padx=15, pady=2)
 
     def on_fallback_action_change(self):
         action = self.fallback_action_type.get()
@@ -1611,6 +1637,13 @@ class StepEditor(tk.Toplevel):
                     step['action_params']['click_offset_y'] = int(self.simple_click_offset_y.get())
                 except ValueError:
                     self.master.log("Error: Click offsets must be integers.")
+                    return
+            elif action_type == 'Scroll':
+                try:
+                    step['action_params']['scroll_direction'] = self.scroll_direction.get()
+                    step['action_params']['scroll_amount'] = int(self.scroll_amount.get())
+                except ValueError:
+                    self.master.log("Error: Scroll amount must be an integer.")
                     return
 
             if step['detection_mode'] == 'Color':

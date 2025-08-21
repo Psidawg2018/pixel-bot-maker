@@ -79,6 +79,10 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ## Changelog
 
+### v0.6.5 - (2025-08-21)
+- **Mouse Wheel Actions.**
+- Added **Scroll** as a new action type, allowing the bot to scroll up or down.
+
 ### v0.6.4 - (2025-08-20)
 - **Right-click action.**
 - Added **Right-click** as a new action type for simple actions.
@@ -140,8 +144,8 @@ Here’s a "Hello World" style tutorial to get you started:
 ---
 
 ### 🛠 v0.6 – Core Automation Expansion
+- [x] Mouse Wheel Actions (scrolling support)
 - [ ] Keyboard Shortcuts: Key combos (Ctrl+Alt+Del, etc.)
-- [ ] Mouse Wheel Actions (scrolling support)
 
 ---
 
