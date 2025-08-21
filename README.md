@@ -2,6 +2,16 @@
 
 A simple GUI application for creating automated bot scripts that can find images or colors on the screen and perform actions.
 
+## Overview
+
+Pixel Bot Maker is a user-friendly tool designed for creating simple automation scripts (bots) without writing any code. It allows you to build a sequence of actions, such as clicking buttons or typing text, by identifying images or colors on your screen. It's perfect for automating repetitive tasks in games, applications, or websites.
+
+### Screenshots
+
+*A screenshot of the main interface would go here, showing the two-column layout, action sequence, and log.*
+
+*A short GIF demonstrating the process of adding a step, saving a sequence, and running the bot would be ideal here.*
+
 ## Features
 
 - **Tabbed Interface:** The main window is organized into "Main" and "Settings" tabs for a cleaner user experience.
@@ -10,101 +20,107 @@ A simple GUI application for creating automated bot scripts that can find images
 - **Frequently Used List:** The top 3 most frequently loaded sequences are displayed on the main screen for quick one-click access.
 - **Simple Actions:**
   - **Click:** Find a target (image or color) and click it.
+  - **Right-click:** Find a target and right-click it.
   - **Click with Offset:** Find a target image and then click at a position relative to the center of that image, based on the X and Y offsets you provide.
   - **Type:** Find a target and then type a specified text string.
 - **Loop Controls:**
   - **Repeat X Times:** Create a loop that executes a sequence of sub-actions a specified number of times.
   - **Loop Until Condition:** Create a loop that executes a sequence of sub-actions until a specific image appears on the screen. This loop includes a configurable retry limit to prevent infinite execution.
 - **Conditional Logic (Legacy):**
-  - **Conditional Loops:** Create complex steps that will try to find a primary image target. If the target isn't found, it can perform a fallback action.
-  #### Fallback Actions
-  - **Click**: This action requires a secondary image target. If the primary target is not found, the bot will search for this secondary target and click on it.
-  - **Click with Offset**: This action also requires a secondary image target. It finds the target and then applies an X/Y offset before clicking. This is useful for clicking next to a known image when the button itself is not unique.
-  - **Click and Drag**: This action does **not** use an image. Instead, it performs a drag action relative to the center of the target window. The X and Y offsets you provide will define the drag vector from the window's center. This is useful for actions like scrolling a list.
+  - **Conditional Loops:** Create complex steps that will try to find a primary image target. If the target isn't found, it can perform a fallback action (e.g., click a different button, scroll a list).
 - **Human-like Delays:**
   - **Post-Action Wait:** For any step, you can configure a wait time that occurs after the action is successfully completed. This makes the automation appear less robotic.
-  - **Wait Options:** You can choose between no wait, a fixed duration, or a random duration between a min and max value.
 - **Interactive Configuration:**
   - **Window Selector:** Select a specific application window for the bot to operate within.
   - **Image Template Manager:** Take screenshots of screen regions to use as image targets.
-  - **Screen Region Locking:** For any action, you can define a specific rectangular area within the target window to search for the image or color. This is useful for focusing actions on a smaller part of a large application window, improving both speed and reliability.
-  - **Multiple Image Matching:** For any image-based action, you can provide multiple template images. The bot will perform the action on the first one it finds (OR logic).
+  - **Screen Region Locking:** Define a specific rectangular area within the target window to search for an image, improving both speed and reliability.
+  - **Multiple Image Matching:** Provide multiple template images for an action; the bot will act on the first one it finds.
   - **Color Sampler:** An on-screen eyedropper tool to select a specific color to search for.
 - **Customization:**
   - **Global Hotkey:** Customize the key used to start and stop the bot.
   - **Themes:** Choose between a light or dark theme.
-  - **Defaults:** Set the default behavior for hiding the application window when the bot is running.
-  - **Image Similarity Threshold:** Adjust the strictness of image matching (fuzzy matching) via a slider in the Settings tab.
+  - **Image Similarity Threshold:** Adjust the strictness of image matching (fuzzy matching).
+
+## Getting Started
+
+### Requirements
+- Python 3.x
+
+### Installation
+1. Clone or download the repository.
+2. Open a terminal or command prompt in the project directory.
+3. Install the required libraries using pip:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Running the Application
+Once the dependencies are installed, you can run the application with the following command:
+```bash
+python main.py
+```
+
+## Usage (Quick Start)
+
+Here’s a "Hello World" style tutorial to get you started:
+
+1.  **Launch the App:** Run `python main.py`. A window selector will appear.
+2.  **Select a Window:** Choose the application window you want the bot to interact with from the dropdown list and click "Select."
+3.  **Add a Step:**
+    - Click the "Add Step" button.
+    - In the "Step Editor" window, select "Click" as the action type.
+    - Click "Add Image" and use the screen capture tool to select a region of the screen (e.g., a button) you want the bot to click.
+    - Click "Save Step."
+4.  **Save the Sequence:**
+    - Click the "Save Sequence" button on the main window and give your bot a name.
+5.  **Run the Bot:**
+    - Press the "Start Bot" button (or your configured hotkey).
+    - The bot will now search for the image you selected and click it.
 
 ## Changelog
 
 ### v0.6.4 - (2025-08-20)
 - **Right-click action.**
 - Added **Right-click** as a new action type for simple actions.
-- The UI in the Step Editor has been updated to include this new option.
-- The automation engine now correctly performs a right-click when specified.
 
 ### v0.6.3 - (2025-08-20)
 - **Screen Region Locking & Bug Fix.**
-- **New Feature**: Added **Screen Region Locking**. Users can now define a specific sub-region within a target window for an action to search in. This greatly improves performance and reliability when working with large or complex application windows.
-- **Bug Fix**: The core image-finding logic is now color-sensitive. Previously, it converted images to grayscale, which could lead to incorrect matches (e.g., finding a blue button when searching for a red one). The matching algorithm now correctly uses color information and handles templates with transparency.
+- **New Feature**: Added **Screen Region Locking**.
+- **Bug Fix**: Image-finding logic now correctly uses color information.
 
 ### v0.6.2 - (2025-08-20)
 - **Image Similarity Threshold.**
 - Added a new **Image Similarity Threshold** slider to the Settings tab.
-- This allows users to control the strictness of image matching, enabling "fuzzy" searches.
-- The setting is saved and persists between application sessions.
 
 ### v0.6.1 - (2025-08-20)
 - **Critical Bug Fixes & Stability.**
-- Fixed a critical crash (`AttributeError`) that occurred when creating or editing "Conditional Loop" and "Loop" steps.
-- The underlying cause was an incomplete refactoring, which led to inconsistent UI and broken save logic.
-- Standardized the image selection UI in the Step Editor to consistently use a multi-select listbox.
-- Completely rewrote the save logic for "Conditional Loop" and "Loop" steps to be more robust and bug-free.
-- Removed significant amounts of dead code and unused variables from the `StepEditor`.
+- Fixed a critical crash (`AttributeError`) related to "Conditional Loop" and "Loop" steps.
 
 ### v0.6 - (2025-08-20)
 - **Loop Controls & Multi-Image Matching.**
-- Implemented a new **Loop** step type with two modes:
-  - **Repeat X Times**: Executes a sequence of sub-actions a specified number of times.
-  - **Until Condition Met**: Executes sub-actions until a specific image is found on screen. This includes a configurable retry limit to prevent infinite loops.
-- The Step Editor now supports creating and editing nested actions within these loops.
-- Added **Multiple Image Matching** (OR Logic). Any step that searches for an image can now be given multiple templates. The bot will act on the first one it finds.
+- Implemented a new **Loop** step type ("Repeat X Times" and "Until Condition Met").
+- Added **Multiple Image Matching** (OR Logic).
 
 ### v0.5 - (2025-08-19)
 - **New Features and Settings.**
-- Added a **Settings Tab** to the main UI.
-- Implemented **Theme Selection** (Light/Dark). The application must be restarted for the theme to apply.
-- Implemented **Customizable Hotkeys**. Users can now set their own key to start/stop the bot.
-- Added a setting to control the **default state of the "Hide Bot" checkbox**.
-- Added a **"Frequently Used"** list to the main tab, showing the top 3 most loaded sequences for quick access.
-- All settings are now saved to a `settings.json` file and persist between sessions.
+- Added a **Settings Tab**, **Theme Selection**, and **Customizable Hotkeys**.
+- Added a **"Frequently Used"** list.
 
 ### v0.4 - (2025-08-19)
 - **UI Enhancements.**
-- The "Step Editor" window has been made 25% wider to better accommodate complex step configurations.
+- The "Step Editor" window was made 25% wider.
 
 ### v0.3 - (2025-08-19)
 - **Major GUI Refactor.**
-- The main window layout has been changed from a single column to a **two-column layout**, with controls on the left and the log on the right.
-- Added **"Move Up" and "Move Down" buttons** to the Action Sequence panel, allowing users to reorder steps.
+- Changed to a **two-column layout** and added **"Move Up"/"Move Down"** buttons.
 
 ### v0.2 - (2025-08-18)
 - **New Features and Enhancements.**
-- Added **Click with Offset** as a new action type for both simple and fallback actions.
-- Added a **Post-Action Wait** setting for each step, with options for "None," "Fixed," or "Random" delays.
-- Added **Do Nothing** as a new fallback action for conditional loops.
-- Implemented **Save and Load** functionality for action sequences.
-- The "Click and Drag" fallback action is now correctly based on the window center and does not require an image.
+- Added **Click with Offset**, **Post-Action Wait**, and **Save/Load**.
 
 ### v0.1 - (2025-08-16)
 - **Initial feature set and bug fixes.**
-- Implemented core action sequencer.
-- Added "Conditional Loop" step type with fallback actions.
-- Added "Click and Drag" as a possible fallback action.
-- Fixed several UI bugs, including a crash in the Step Editor.
-- Added a splash screen to force window selection on startup.
-- Added `.gitignore` to exclude user-generated template files.
+- Implemented core action sequencer and "Conditional Loop."
 
 ## 🛣️ Roadmap
 
