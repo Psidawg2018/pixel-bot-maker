@@ -92,3 +92,4 @@ app.log
 # Application-specific ignores
 # Ignore user-generated templates but keep the directory
 templates/*.png
+settings.json
