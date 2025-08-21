@@ -37,6 +37,12 @@ A simple GUI application for creating automated bot scripts that can find images
 
 ## Changelog
 
+### v0.6.2 - (2025-08-20)
+- **Image Similarity Threshold.**
+- Added a new **Image Similarity Threshold** slider to the Settings tab.
+- This allows users to control the strictness of image matching, enabling "fuzzy" searches.
+- The setting is saved and persists between application sessions.
+
 ### v0.6.1 - (2025-08-20)
 - **Critical Bug Fixes & Stability.**
 - Fixed a critical crash (`AttributeError`) that occurred when creating or editing "Conditional Loop" and "Loop" steps.
