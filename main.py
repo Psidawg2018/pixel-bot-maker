@@ -1149,6 +1149,7 @@ class StepEditor(tk.Toplevel):
         self.simple_click_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_y', '0'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
         self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title.get() or ''))
+
         self.search_region = self.step_data.get('search_region') # This is now a direct attribute
         self.search_region_label_var = tk.StringVar(value=self._get_region_display_text())
         if self.step_data.get('detection_mode') == 'Color':
