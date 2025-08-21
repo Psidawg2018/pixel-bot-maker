@@ -15,6 +15,19 @@ def click_at(x, y):
     mouse.click(Button.left, 1)
     print(f"Clicked at ({x}, {y})")
 
+def right_click_at(x, y):
+    """
+    Moves the mouse to the given coordinates and performs a right click.
+
+    :param x: The x-coordinate.
+    :param y: The y-coordinate.
+    """
+    mouse = MouseController()
+    mouse.position = (x, y)
+    time.sleep(0.1) # Small delay to ensure mouse has moved
+    mouse.click(Button.right, 1)
+    print(f"Right-clicked at ({x}, {y})")
+
 def type_text(text):
     """
     Types the given string using the keyboard.
