@@ -157,6 +157,37 @@ class App(tk.Tk):
         light_radio = tk.Radiobutton(theme_frame, text="Light", variable=self.theme_var, value="light", bg=self.bg_color, fg=self.text_color, selectcolor=self.widget_bg_color, command=self.apply_theme)
         light_radio.pack(side="left")
 
+        # --- Image Matching Settings ---
+        matching_frame = tk.LabelFrame(settings_content_frame, text="Image Matching", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
+        matching_frame.pack(fill="x", pady=5, anchor="n")
+
+        self.similarity_threshold_var = tk.DoubleVar(value=self.settings_manager.get_setting('image_similarity_threshold'))
+
+        threshold_inner_frame = tk.Frame(matching_frame, bg=self.bg_color)
+        threshold_inner_frame.pack(fill="x", pady=2)
+
+        tk.Label(threshold_inner_frame, text="Similarity Threshold:", bg=self.bg_color, fg=self.text_color).pack(side="left", padx=5)
+        self.similarity_label_var = tk.StringVar(value=f"{self.similarity_threshold_var.get():.2f}")
+        tk.Label(threshold_inner_frame, textvariable=self.similarity_label_var, bg=self.widget_bg_color, fg=self.text_color, width=5).pack(side="left")
+
+        similarity_slider = tk.Scale(
+            threshold_inner_frame,
+            from_=0.0,
+            to=1.0,
+            resolution=0.05,
+            orient=tk.HORIZONTAL,
+            variable=self.similarity_threshold_var,
+            command=self.save_similarity_threshold,
+            bg=self.bg_color,
+            fg=self.text_color,
+            troughcolor=self.widget_bg_color,
+            showvalue=0, # Hide the default value text
+            relief=tk.FLAT,
+            highlightthickness=0
+        )
+        similarity_slider.pack(side="left", fill="x", expand=True, padx=5)
+
+
         # --- Hotkey Settings ---
         hotkey_frame = tk.LabelFrame(settings_content_frame, text="Hotkey", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
         hotkey_frame.pack(fill="x", pady=5, anchor="n")
@@ -384,6 +415,14 @@ class App(tk.Tk):
         self.settings_manager.set_setting('hide_bot_default', self.hide_bot_default_var.get())
         self.log("Default 'Hide Bot' setting saved.")
 
+    def save_similarity_threshold(self, value):
+        """Called when the similarity slider is moved."""
+        # The 'value' argument is a string from the Scale widget, so we convert it to float
+        new_threshold = float(value)
+        self.settings_manager.set_setting('image_similarity_threshold', new_threshold)
+        self.similarity_label_var.set(f"{new_threshold:.2f}")
+        # No log message here to prevent spamming the log while dragging the slider
+
     def apply_theme(self):
         theme = self.theme_var.get()
         self.settings_manager.set_setting('theme', theme)
@@ -552,7 +591,8 @@ class App(tk.Tk):
                     if isinstance(targets, str): targets = [targets]
                     needle_imgs = [cv2.imread(p, cv2.IMREAD_UNCHANGED) for p in targets]
 
-                    if find_image(haystack_img, [img for img in needle_imgs if img is not None]):
+                    threshold = self.settings_manager.get_setting('image_similarity_threshold')
+                    if find_image(haystack_img, [img for img in needle_imgs if img is not None], threshold=threshold):
                         self.log("  - Condition met. Exiting loop.")
                         condition_found = True
                         break
@@ -611,7 +651,8 @@ class App(tk.Tk):
                     self.log(f"    - Error: No valid template images could be loaded.")
                     return False
 
-                target_pos = find_image(haystack_img, needle_imgs)
+                threshold = self.settings_manager.get_setting('image_similarity_threshold')
+                target_pos = find_image(haystack_img, needle_imgs, threshold=threshold)
             except Exception as e:
                 self.log(f"    - Error during image search: {e}")
                 return False
@@ -712,7 +753,8 @@ class App(tk.Tk):
             targets = primary_target['detection_target']
             if isinstance(targets, str): targets = [targets]
             needle_imgs = [cv2.imread(p, cv2.IMREAD_UNCHANGED) for p in targets]
-            primary_pos = find_image(haystack_img, [img for img in needle_imgs if img is not None])
+            threshold = self.settings_manager.get_setting('image_similarity_threshold')
+            primary_pos = find_image(haystack_img, [img for img in needle_imgs if img is not None], threshold=threshold)
         except Exception as e:
             self.log(f"Loop Error: Could not load primary target image(s). {e}")
             self.toggle_bot()
@@ -773,7 +815,8 @@ class App(tk.Tk):
                 targets = action_details['detection_target']
                 if isinstance(targets, str): targets = [targets]
                 needle_imgs = [cv2.imread(p, cv2.IMREAD_UNCHANGED) for p in targets]
-                target_pos = find_image(haystack_img, [img for img in needle_imgs if img is not None])
+                threshold = self.settings_manager.get_setting('image_similarity_threshold')
+                target_pos = find_image(haystack_img, [img for img in needle_imgs if img is not None], threshold=threshold)
             except Exception as e:
                 self.log(f"Fallback Error: Could not load image(s). {e}")
                 return False

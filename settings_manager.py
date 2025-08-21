@@ -9,6 +9,7 @@ class SettingsManager:
             "theme": "dark",
             "hide_bot_default": True,
             "hotkey": "F9",
+            "image_similarity_threshold": 0.9,
             "default_wait_times": {
                 "type": "Fixed",
                 "fixed_time": 1.0,
