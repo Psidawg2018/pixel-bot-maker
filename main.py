@@ -15,7 +15,7 @@ import cv2
 from PIL import Image, ImageTk
 from screen_capture import capture_screen
 from image_analyzer import find_color, find_image
-from automation import click_at, type_text, click_and_drag
+from automation import click_at, right_click_at, type_text, click_and_drag
 from settings_manager import SettingsManager
 
 class App(tk.Tk):
@@ -682,6 +682,9 @@ class App(tk.Tk):
             if action_type == "Click":
                 self.log(f"    - Performing action: Click at ({abs_x}, {abs_y})")
                 click_at(abs_x, abs_y)
+            elif action_type == "Right-click":
+                self.log(f"    - Performing action: Right-click at ({abs_x}, {abs_y})")
+                right_click_at(abs_x, abs_y)
             elif action_type == "Click with Offset":
                 offset_x = action_params.get('click_offset_x', 0)
                 offset_y = action_params.get('click_offset_y', 0)
@@ -1267,6 +1270,7 @@ class StepEditor(tk.Toplevel):
         action_frame = tk.LabelFrame(parent_frame, text="3. Choose Action", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         action_frame.pack(pady=10, padx=10, fill="x")
         tk.Radiobutton(action_frame, text="Click", variable=self.action_type, value="Click", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Right-click", variable=self.action_type, value="Right-click", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Click with Offset", variable=self.action_type, value="Click with Offset", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Type", variable=self.action_type, value="Type", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
 
@@ -1518,7 +1522,7 @@ class StepEditor(tk.Toplevel):
         elif action == "Click with Offset":
             self.type_entry_frame.pack_forget()
             self.simple_offset_frame.pack(fill="x", padx=15, pady=2)
-        else:  # Click
+        else:  # Click or Right-click
             self.type_entry_frame.pack_forget()
             self.simple_offset_frame.pack_forget()
 
