@@ -1149,7 +1149,8 @@ class StepEditor(tk.Toplevel):
         self.simple_click_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_y', '0'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
         self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title.get() or ''))
-        self.search_region = tk.Variable(value=self.step_data.get('search_region'))
+
+        self.search_region = self.step_data.get('search_region') # This is now a direct attribute
         self.search_region_label_var = tk.StringVar(value=self._get_region_display_text())
         if self.step_data.get('detection_mode') == 'Color':
             self.target_color_bgr = self.step_data.get('detection_target', [0,0,255])
@@ -1585,7 +1586,7 @@ class StepEditor(tk.Toplevel):
                 "action_params": {},
                 "detection_target": None,
                 "detection_target_name": "",
-                "search_region": self.search_region.get()
+                "search_region": self.search_region
             }
 
             action_type = step['action_type']
@@ -1624,7 +1625,7 @@ class StepEditor(tk.Toplevel):
                 "loop_mode": self.loop_mode.get(),
                 "loop_actions": self.loop_actions,
                 "window_title": self.target_window_title.get(),
-                "search_region": self.search_region.get()
+                "search_region": self.search_region
             }
             if step['loop_mode'] == 'repeat':
                 step['loop_repeat_count'] = repeat_count
@@ -1697,7 +1698,7 @@ class StepEditor(tk.Toplevel):
                 "max_retries": max_retries,
                 "primary_target": primary_target_dict,
                 "on_fail": on_fail_dict,
-                "search_region": self.search_region.get()
+                "search_region": self.search_region
             }
 
         # --- Save Wait Parameters ---
@@ -1770,7 +1771,7 @@ class StepEditor(tk.Toplevel):
                 self.master.log(f"Error saving template: {e}")
 
     def _get_region_display_text(self):
-        region = self.search_region.get()
+        region = self.search_region
         if region:
             return f"Region set: X={region['x']}, Y={region['y']}, W={region['width']}, H={region['height']}"
         return "Not set. The entire target window will be searched."
@@ -1795,12 +1796,12 @@ class StepEditor(tk.Toplevel):
         except Exception as e:
             self.master.log(f"Could not adjust region to window: {e}. Using absolute coordinates.")
 
-        self.search_region.set(region)
+        self.search_region = region
         self.search_region_label_var.set(self._get_region_display_text())
         self.master.log(f"Search region set.")
 
     def clear_search_region(self):
-        self.search_region.set(None)
+        self.search_region = None
         self.search_region_label_var.set(self._get_region_display_text())
         self.master.log("Search region has been cleared.")
 
