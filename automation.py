@@ -78,20 +78,44 @@ def click_and_drag(start_x, start_y, end_x, end_y, duration=0.5):
     mouse.release(Button.left)
     print(f"Dragged from ({start_x}, {start_y}) to ({end_x}, {end_y})")
 
+
+def scroll_wheel(direction, amount):
+    """
+    Simulates scrolling the mouse wheel up or down.
+
+    :param direction: 'up' or 'down'.
+    :param amount: The number of steps to scroll.
+    """
+    mouse = MouseController()
+    # Based on pynput documentation, a positive dy scrolls down, negative scrolls up.
+    dy = amount if direction == 'down' else -amount
+    mouse.scroll(0, dy)
+    print(f"Scrolled {direction} by {amount} steps.")
+
+
 if __name__ == '__main__':
     print("Running automation tests...")
-    print("This test will simulate a click and typing in 3 seconds.")
-    print("It will happen on the virtual display. There is no visual feedback here.")
-
+    print("This test will simulate actions in 3 seconds.")
+    print("Please focus a window where you can observe the actions (e.g., a text editor).")
     time.sleep(3)
 
     # Test click
-    # In our 1280x720 virtual display, let's click near the center.
+    print("\nTesting click...")
     click_at(640, 360)
-
     time.sleep(1)
 
     # Test typing
+    print("\nTesting typing...")
     type_text("Hello from the automation script!")
+    time.sleep(1)
+
+    # Test scrolling
+    print("\nTesting scroll down...")
+    scroll_wheel('down', 5)
+    time.sleep(1)
+
+    print("\nTesting scroll up...")
+    scroll_wheel('up', 5)
+    time.sleep(1)
 
     print("\nAutomation test script finished.")
