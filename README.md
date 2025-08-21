@@ -33,6 +33,7 @@ A simple GUI application for creating automated bot scripts that can find images
   - **Global Hotkey:** Customize the key used to start and stop the bot.
   - **Themes:** Choose between a light or dark theme.
   - **Defaults:** Set the default behavior for hiding the application window when the bot is running.
+  - **Image Similarity Threshold:** Adjust the strictness of image matching (fuzzy matching) via a slider in the Settings tab.
 
 ## Changelog
 
@@ -98,13 +99,13 @@ A simple GUI application for creating automated bot scripts that can find images
 - [x] GUI refinements (two-column layout, step reordering, theme selection, hotkeys, hide bot option)
 - [x] Loop Controls: "Repeat X times" and "Loop until condition"
 - [x] Multiple Image Matching (OR logic in one step)
+- [x] Image Similarity Threshold (fuzzy matching)
 
 
 ---
 
 ### 🛠 v0.6 – Core Automation Expansion
 - [ ] Screen Region Locking: Restrict actions to specific areas
-- [ ] Image Similarity Threshold (fuzzy matching)
 - [ ] Keyboard Shortcuts: Key combos (Ctrl+Alt+Del, etc.)
 - [ ] Mouse Wheel Actions (scrolling support)
 - [ ] Right-click Actions
