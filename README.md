@@ -38,6 +38,12 @@ A simple GUI application for creating automated bot scripts that can find images
 
 ## Changelog
 
+### v0.6.4 - (2025-08-20)
+- **Right-click action.**
+- Added **Right-click** as a new action type for simple actions.
+- The UI in the Step Editor has been updated to include this new option.
+- The automation engine now correctly performs a right-click when specified.
+
 ### v0.6.3 - (2025-08-20)
 - **Screen Region Locking & Bug Fix.**
 - **New Feature**: Added **Screen Region Locking**. Users can now define a specific sub-region within a target window for an action to search in. This greatly improves performance and reliability when working with large or complex application windows.
@@ -113,14 +119,13 @@ A simple GUI application for creating automated bot scripts that can find images
 - [x] Multiple Image Matching (OR logic in one step)
 - [x] Image Similarity Threshold (fuzzy matching)
 - [x] Screen Region Locking: Restrict actions to specific areas
-
+- [x] Right-click Actions
 
 ---
 
 ### 🛠 v0.6 – Core Automation Expansion
 - [ ] Keyboard Shortcuts: Key combos (Ctrl+Alt+Del, etc.)
 - [ ] Mouse Wheel Actions (scrolling support)
-- [ ] Right-click Actions
 
 ---
 
