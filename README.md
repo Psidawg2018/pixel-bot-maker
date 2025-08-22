@@ -79,6 +79,10 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ## Changelog
 
+### v0.6.6 - (2025-08-22)
+- **Keyboard Shortcut Actions.**
+- Added **Key Combo** as a new action type, allowing the bot to press key combinations like `Ctrl+C` or `Alt+F4`.
+
 ### v0.6.5 - (2025-08-21)
 - **Mouse Wheel Actions.**
 - Added **Scroll** as a new action type, allowing the bot to scroll up or down.
@@ -143,9 +147,9 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ---
 
-### 🛠 v0.6 – Core Automation Expansion
+### ✅ v0.6 – Core Automation Expansion (Completed)
 - [x] Mouse Wheel Actions (scrolling support)
-- [ ] Keyboard Shortcuts: Key combos (Ctrl+Alt+Del, etc.)
+- [x] Keyboard Shortcuts: Key combos (Ctrl+Alt+Del, etc.)
 
 ---
 
