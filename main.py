@@ -1355,6 +1355,7 @@ class StepEditor(tk.Toplevel):
         self.key_combo_entry = tk.Entry(self.key_combo_frame, textvariable=self.key_combo_text, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=20)
         self.key_combo_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
 
+
         self.set_variable_frame = tk.Frame(action_frame, bg=self.master.bg_color)
         tk.Label(self.set_variable_frame, text="Name:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
         tk.Entry(self.set_variable_frame, textvariable=self.variable_name, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=15).pack(side="left", padx=5)
@@ -1614,7 +1615,9 @@ class StepEditor(tk.Toplevel):
         self.simple_offset_frame.pack_forget()
         self.scroll_frame.pack_forget()
         self.key_combo_frame.pack_forget()
+
         self.set_variable_frame.pack_forget()
+
 
         if action == "Type":
             self.type_entry_frame.pack(fill="x", padx=5, pady=2)
@@ -1699,9 +1702,11 @@ class StepEditor(tk.Toplevel):
                 step['action_params']['text'] = self.text_to_type.get()
             elif action_type == 'Key Combo':
                 step['action_params']['key_combo'] = self.key_combo_text.get()
+
             elif action_type == 'Set Variable':
                 step['action_params']['variable_name'] = self.variable_name.get()
                 step['action_params']['variable_value'] = self.variable_value.get()
+
             elif action_type == 'Click with Offset':
                 try:
                     step['action_params']['click_offset_x'] = int(self.simple_click_offset_x.get())
