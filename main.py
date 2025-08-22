@@ -15,7 +15,7 @@ import cv2
 from PIL import Image, ImageTk
 from screen_capture import capture_screen
 from image_analyzer import find_color, find_image
-from automation import click_at, right_click_at, type_text, click_and_drag, scroll_wheel
+from automation import click_at, right_click_at, type_text, click_and_drag, scroll_wheel, press_key_combination
 from settings_manager import SettingsManager
 
 class App(tk.Tk):
@@ -696,6 +696,10 @@ class App(tk.Tk):
                 text = action_params.get('text', '')
                 self.log(f"    - Performing action: Type '{text}'")
                 type_text(text)
+            elif action_type == "Key Combo":
+                key_combo = action_params.get('key_combo', '')
+                self.log(f"    - Performing action: Press keys '{key_combo}'")
+                press_key_combination(key_combo)
             elif action_type == "Scroll":
                 direction = action_params.get('scroll_direction', 'Down')
                 amount = action_params.get('scroll_amount', 5)
@@ -1163,6 +1167,7 @@ class StepEditor(tk.Toplevel):
         self.simple_click_offset_x = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_x', '0'))
         self.simple_click_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_y', '0'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
+        self.key_combo_text = tk.StringVar(value=self.step_data.get('action_params', {}).get('key_combo', 'ctrl+c'))
         self.scroll_direction = tk.StringVar(value=self.step_data.get('action_params', {}).get('scroll_direction', 'Down'))
         self.scroll_amount = tk.StringVar(value=self.step_data.get('action_params', {}).get('scroll_amount', '5'))
         self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title.get() or ''))
@@ -1296,11 +1301,17 @@ class StepEditor(tk.Toplevel):
         tk.Radiobutton(action_frame, text="Right-click", variable=self.action_type, value="Right-click", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Click with Offset", variable=self.action_type, value="Click with Offset", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Type", variable=self.action_type, value="Type", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Key Combo", variable=self.action_type, value="Key Combo", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Scroll", variable=self.action_type, value="Scroll", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
 
         self.type_entry_frame = tk.Frame(action_frame, bg=self.master.bg_color)
         self.type_entry = tk.Entry(self.type_entry_frame, textvariable=self.text_to_type, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT)
         self.type_entry.pack(fill="x", padx=5, pady=5)
+
+        self.key_combo_frame = tk.Frame(action_frame, bg=self.master.bg_color)
+        tk.Label(self.key_combo_frame, text="Keys (e.g., ctrl+alt+delete):", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        self.key_combo_entry = tk.Entry(self.key_combo_frame, textvariable=self.key_combo_text, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=20)
+        self.key_combo_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
 
         self.simple_offset_frame = tk.Frame(action_frame, bg=self.master.bg_color)
         simple_offset_x_frame = tk.Frame(self.simple_offset_frame, bg=self.master.bg_color)
@@ -1553,11 +1564,14 @@ class StepEditor(tk.Toplevel):
         self.type_entry_frame.pack_forget()
         self.simple_offset_frame.pack_forget()
         self.scroll_frame.pack_forget()
+        self.key_combo_frame.pack_forget()
 
         if action == "Type":
             self.type_entry_frame.pack(fill="x", padx=5, pady=2)
         elif action == "Click with Offset":
             self.simple_offset_frame.pack(fill="x", padx=15, pady=2)
+        elif action == "Key Combo":
+            self.key_combo_frame.pack(fill="x", padx=5, pady=2)
         elif action == "Scroll":
             self.scroll_frame.pack(fill="x", padx=15, pady=2)
 
@@ -1631,6 +1645,8 @@ class StepEditor(tk.Toplevel):
             action_type = step['action_type']
             if action_type == 'Type':
                 step['action_params']['text'] = self.text_to_type.get()
+            elif action_type == 'Key Combo':
+                step['action_params']['key_combo'] = self.key_combo_text.get()
             elif action_type == 'Click with Offset':
                 try:
                     step['action_params']['click_offset_x'] = int(self.simple_click_offset_x.get())
