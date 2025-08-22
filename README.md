@@ -24,6 +24,8 @@ Pixel Bot Maker is a user-friendly tool designed for creating simple automation 
   - **Click with Offset:** Find a target image and then click at a position relative to the center of that image, based on the X and Y offsets you provide.
   - **Type:** Find a target and then type a specified text string.
   - **Key Combo:** Perform a keyboard shortcut. To use this, type the key names as a string (e.g., `ctrl+c`, `alt+f4`, `ctrl+alt+delete`).
+  - **Set Variable:** Create a variable to store text that can be used in other actions. For example, set a variable named `username` to the value `test_user`.
+- **Variable Usage:** Use the `{{variable_name}}` syntax in the text fields of other actions (like "Type" or "Key Combo") to substitute the stored value.
 - **Loop Controls:**
   - **Repeat X Times:** Create a loop that executes a sequence of sub-actions a specified number of times.
   - **Loop Until Condition:** Create a loop that executes a sequence of sub-actions until a specific image appears on the screen. This loop includes a configurable retry limit to prevent infinite execution.
@@ -79,6 +81,11 @@ Here’s a "Hello World" style tutorial to get you started:
     - The bot will now search for the image you selected and click it.
 
 ## Changelog
+
+### v0.7.0 - (2025-08-22)
+- **Variable System.**
+- Added a **Set Variable** action to create and store text variables.
+- Variables can be used in other actions (e.g., "Type", "Key Combo") using `{{variable_name}}` syntax.
 
 ### v0.6.6 - (2025-08-22)
 - **Keyboard Shortcut Actions.**
@@ -156,7 +163,7 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ### ⚡ v0.7 – Logic & Intelligence
 - [ ] If/Else Chains (multi-branch logic)
-- [ ] Variable System: Simple text variables
+- [x] Variable System: Simple text variables
 - [ ] Counter Variables (track action counts)
 - [ ] Time-based Conditions (scheduled logic)
 - [ ] Success/Failure Tracking (log pass/fail, allow retry/skip)
