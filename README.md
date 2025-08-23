@@ -83,6 +83,11 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ## Changelog
 
+### v0.7.4 - (2025-08-23)
+- **Time-based Conditions & Bug Fix.**
+- Added a new **Time-based Condition** step to allow for scheduled execution of actions.
+- Fixed a bug where the `cmd` key was not recognized as a modifier for key combinations.
+
 ### v0.7.3 - (2025-08-23)
 - **Counter Variables & Variable Modification.**
 - Added a new **Modify Variable** action to perform arithmetic (add/subtract) or `set` operations on variables, enabling counters and more dynamic logic.
@@ -179,7 +184,7 @@ Here’s a "Hello World" style tutorial to get you started:
 - [x] If/Else Chains (multi-branch logic)
 - [x] Variable System: Simple text variables
  - [x] Counter Variables (track action counts)
-- [ ] Time-based Conditions (scheduled logic)
+- [x] Time-based Conditions (scheduled logic)
 - [ ] Success/Failure Tracking (log pass/fail, allow retry/skip)
 - [x] OCR Support (text recognition for UI elements)
 
