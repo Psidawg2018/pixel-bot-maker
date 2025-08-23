@@ -14,36 +14,16 @@ Pixel Bot Maker is a user-friendly tool designed for creating simple automation 
 
 ## Features
 
-- **Tabbed Interface:** The main window is organized into "Main" and "Settings" tabs for a cleaner user experience.
-- **Action Sequencing:** Create a list of steps for the bot to follow in order. You can easily reorder actions using "Move Up" and "Move Down" buttons.
-- **Save/Load Sequences:** Save your created action sequences to a file and load them back in later.
-- **Frequently Used List:** The top 3 most frequently loaded sequences are displayed on the main screen for quick one-click access.
-- **Simple Actions:**
-  - **Click:** Find a target (image or color) and click it.
-  - **Right-click:** Find a target and right-click it.
-  - **Click with Offset:** Find a target image and then click at a position relative to the center of that image, based on the X and Y offsets you provide.
-  - **Type:** Find a target and then type a specified text string.
-  - **Key Combo:** Perform a keyboard shortcut. To use this, type the key names as a string (e.g., `ctrl+c`, `alt+f4`, `ctrl+alt+delete`).
-  - **Set Variable:** Create a variable to store text that can be used in other actions. For example, set a variable named `username` to the value `test_user`.
-  - **OCR:** Read text from a defined screen region and save it to a variable.
-- **Variable Usage:** Use the `{{variable_name}}` syntax in the text fields of other actions (like "Type" or "Key Combo") to substitute the stored value.
-- **Loop Controls:**
-  - **Repeat X Times:** Create a loop that executes a sequence of sub-actions a specified number of times.
-  - **Loop Until Condition:** Create a loop that executes a sequence of sub-actions until a specific image appears on the screen. This loop includes a configurable retry limit to prevent infinite execution.
-- **Conditional Logic (Legacy):**
-  - **Conditional Loops:** Create complex steps that will try to find a primary image target. If the target isn't found, it can perform a fallback action (e.g., click a different button, scroll a list).
-- **Human-like Delays:**
-  - **Post-Action Wait:** For any step, you can configure a wait time that occurs after the action is successfully completed. This makes the automation appear less robotic.
-- **Interactive Configuration:**
-  - **Window Selector:** Select a specific application window for the bot to operate within.
-  - **Image Template Manager:** Take screenshots of screen regions to use as image targets.
-  - **Screen Region Locking:** Define a specific rectangular area within the target window to search for an image, improving both speed and reliability.
-  - **Multiple Image Matching:** Provide multiple template images for an action; the bot will act on the first one it finds.
-  - **Color Sampler:** An on-screen eyedropper tool to select a specific color to search for.
-- **Customization:**
-  - **Global Hotkey:** Customize the key used to start and stop the bot.
-  - **Themes:** Choose between a light or dark theme.
-  - **Image Similarity Threshold:** Adjust the strictness of image matching (fuzzy matching).
+Pixel Bot Maker is packed with features to handle a wide variety of automation tasks.
+
+-   **Visual Scripting:** Build automation sequences by adding and arranging steps in a simple, intuitive interface.
+-   **Intelligent Vision:** Find objects on the screen using either image matching (with transparency support) or specific color values.
+-   **Advanced Control Flow:** Go beyond simple scripts with loops, if/else branches, and time-based conditions.
+-   **Dynamic Behavior with Variables:** Create and modify variables to build bots that can react to changing conditions, count items, or handle dynamic text.
+-   **User-Friendly Configuration:** Use on-screen tools like an image-capture utility and a color sampler to easily configure your bot's targets.
+-   **Customization:** Tailor the application to your needs with customizable hotkeys, color themes, and image-matching sensitivity.
+
+**For a complete and detailed explanation of every feature, please see our [Feature Documentation](FEATURES.md).**
 
 ## Getting Started
 
@@ -82,6 +62,11 @@ Here’s a "Hello World" style tutorial to get you started:
     - The bot will now search for the image you selected and click it.
 
 ## Changelog
+
+### v0.7.4 - (2025-08-23)
+- **Time-based Conditions & Bug Fix.**
+- Added a new **Time-based Condition** step to allow for scheduled execution of actions.
+- Fixed a bug where the `cmd` key was not recognized as a modifier for key combinations.
 
 ### v0.7.3 - (2025-08-23)
 - **Counter Variables & Variable Modification.**
@@ -179,7 +164,7 @@ Here’s a "Hello World" style tutorial to get you started:
 - [x] If/Else Chains (multi-branch logic)
 - [x] Variable System: Simple text variables
  - [x] Counter Variables (track action counts)
-- [ ] Time-based Conditions (scheduled logic)
+- [x] Time-based Conditions (scheduled logic)
 - [ ] Success/Failure Tracking (log pass/fail, allow retry/skip)
 - [x] OCR Support (text recognition for UI elements)
 
