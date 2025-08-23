@@ -1391,7 +1391,6 @@ class StepEditor(tk.Toplevel):
         self.loop_frame = tk.Frame(content_frame, bg=self.app.bg_color)
         self.conditional_branch_frame = tk.Frame(content_frame, bg=self.app.bg_color)
 
-
         # --- UI for Simple Action Frame ---
         self.build_simple_action_ui(self.simple_action_frame)
 
