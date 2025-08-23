@@ -25,19 +25,30 @@ def find_color(image, target_bgr):
 
     return locations
 
-def find_text(image):
-    """
-    Extracts text from an image using Tesseract OCR.
+from PIL import Image
 
-    :param image: The image to search (OpenCV format, BGR).
-    :return: The extracted text as a string.
+def extract_text_from_image(image):
     """
-    # Convert the image to grayscale, as it can improve OCR accuracy
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    Uses pytesseract to extract text from a given image.
+    The image is expected to be a NumPy array (from OpenCV).
+    Returns the extracted text as a string, or an error code.
+    """
+    try:
+        # Pytesseract works best with PIL Images. Convert from OpenCV format (BGR) to RGB.
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(rgb_image)
 
-    # Use Tesseract to do OCR on the image
-    text = pytesseract.image_to_string(gray_image)
-    return text.strip()
+        # Perform OCR
+        text = pytesseract.image_to_string(pil_image)
+        return text.strip()
+    except pytesseract.TesseractNotFoundError:
+        print("OCR Error: Tesseract is not installed or not in your PATH.")
+        print("Please install Tesseract OCR from: https://github.com/tesseract-ocr/tesseract")
+        # Return a specific error message that the main app can check for
+        return "TESSERACT_NOT_FOUND"
+    except Exception as e:
+        print(f"An unexpected OCR error occurred: {e}")
+        return "" # Return empty string for other errors
 
 def find_image(haystack_img, needle_imgs, threshold=0.8):
     """
@@ -123,8 +134,8 @@ if __name__ == '__main__':
     except FileNotFoundError as e:
         print(f"SKIPPED: {e}. Run screen_capture.py to generate the test image.")
 
-    # --- Test 2: find_text ---
-    print("\n--- Testing find_text ---")
+    # --- Test 2: extract_text_from_image ---
+    print("\n--- Testing extract_text_from_image ---")
     # Create a test image with text because capture_test.png has none
     width, height = 400, 100
     text_test_image = np.zeros((height, width, 3), np.uint8) # Black background
@@ -144,7 +155,7 @@ if __name__ == '__main__':
     cv2.imwrite("text_test_image.png", text_test_image)
     print("Created text_test_image.png for testing.")
 
-    extracted_text = find_text(text_test_image)
+    extracted_text = extract_text_from_image(text_test_image)
     print(f"Extracted text: '{extracted_text}'")
 
     if extracted_text == test_text:
