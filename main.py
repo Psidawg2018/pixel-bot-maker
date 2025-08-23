@@ -3,6 +3,7 @@ from tkinter import scrolledtext, colorchooser, filedialog, ttk
 import time
 import json
 import random
+import re
 
 # Import our custom modules
 import numpy as np
@@ -15,7 +16,7 @@ import cv2
 from PIL import Image, ImageTk
 from screen_capture import capture_screen
 from image_analyzer import find_color, find_image
-from automation import click_at, right_click_at, type_text, click_and_drag, scroll_wheel
+from automation import click_at, right_click_at, type_text, click_and_drag, scroll_wheel, press_key_combination
 from settings_manager import SettingsManager
 
 class App(tk.Tk):
@@ -42,6 +43,7 @@ class App(tk.Tk):
         self.scan_job = None
         self.hotkey_listener = None
         self.action_sequence = []
+        self.variables = {} # For the new variable system
         self.current_step_index = 0
         self.current_retry_count = 0
         self.hide_window_var = tk.BooleanVar(value=self.settings_manager.get_setting('hide_bot_default'))
@@ -480,6 +482,7 @@ class App(tk.Tk):
             if not self.action_sequence:
                 self.log("Cannot start: Action sequence is empty.")
                 return
+            self.variables.clear() # Reset variables at the start of a run
             self.current_step_index = 0
             self.current_retry_count = 0
             self.running = True
@@ -511,6 +514,25 @@ class App(tk.Tk):
             # If no wait, or wait is 0, proceed to the next step immediately.
             self.run_scan_loop()
 
+    def _substitute_variables(self, text):
+        """
+        Substitutes placeholders like {{var_name}} in a string with their
+        values from the self.variables dictionary.
+        """
+        if not isinstance(text, str):
+            return text
+
+        # This regex finds all occurrences of {{...}}
+        return re.sub(r'\{\{(.*?)\}\}', self._replace_match, text)
+
+    def _replace_match(self, match):
+        """
+        Helper function for re.sub to look up the variable.
+        """
+        var_name = match.group(1).strip()
+        # Return the value if found, otherwise return the original placeholder
+        return self.variables.get(var_name, match.group(0))
+
     def run_scan_loop(self):
         if not self.running:
             return
@@ -522,6 +544,47 @@ class App(tk.Tk):
 
         current_step = self.action_sequence[self.current_step_index]
         step_type = current_step.get('step_type', 'simple')
+        action_type = current_step.get('action_type')
+
+        # Handle non-UI actions first
+        if action_type == 'Set Variable':
+            var_name = current_step.get('action_params', {}).get('variable_name')
+            var_value = self._substitute_variables(current_step.get('action_params', {}).get('variable_value')) # Allow variables in values
+            if var_name:
+                self.log(f"Setting variable '{var_name}' to '{var_value}'")
+                self.variables[var_name] = var_value
+                self.current_step_index += 1
+                self._handle_post_action_wait(current_step) # Still respect wait times
+            else:
+                self.log(f"Error in Step {self.current_step_index+1}: 'Set Variable' action has no variable name. Stopping bot.")
+                self.toggle_bot()
+            return
+        elif action_type == 'OCR':
+            params = current_step.get('action_params', {})
+            region = params.get('ocr_region')
+            output_var = params.get('output_variable_name')
+
+            if not region or not output_var:
+                self.log(f"Error in Step {self.current_step_index+1}: OCR step is not configured correctly. Stopping bot.")
+                self.toggle_bot()
+                return
+
+            self.log(f"Performing OCR on region {region} and saving to '{output_var}'...")
+            screenshot = capture_screen(region)
+            from image_analyzer import extract_text_from_image
+            extracted_text = extract_text_from_image(screenshot)
+
+            if extracted_text == "TESSERACT_NOT_FOUND":
+                self.log("FATAL: Tesseract OCR engine not found. Please install it to use the OCR feature. Stopping bot.")
+                self.toggle_bot()
+                return
+
+            self.log(f"OCR Result: '{extracted_text}'. Stored in variable '{output_var}'.")
+            self.variables[output_var] = extracted_text
+            self.current_step_index += 1
+            self._handle_post_action_wait(current_step)
+            return
+
 
         if step_type == 'simple':
             self._execute_simple_step(current_step)
@@ -693,9 +756,15 @@ class App(tk.Tk):
                 self.log(f"    - Performing action: Click with offset at ({click_x}, {click_y})")
                 click_at(click_x, click_y)
             elif action_type == "Type":
-                text = action_params.get('text', '')
-                self.log(f"    - Performing action: Type '{text}'")
-                type_text(text)
+                text_to_type = action_params.get('text', '')
+                substituted_text = self._substitute_variables(text_to_type)
+                self.log(f"    - Performing action: Type '{substituted_text}'")
+                type_text(substituted_text)
+            elif action_type == "Key Combo":
+                key_combo = action_params.get('key_combo', '')
+                substituted_combo = self._substitute_variables(key_combo)
+                self.log(f"    - Performing action: Press keys '{substituted_combo}'")
+                press_key_combination(substituted_combo)
             elif action_type == "Scroll":
                 direction = action_params.get('scroll_direction', 'Down')
                 amount = action_params.get('scroll_amount', 5)
@@ -1163,6 +1232,12 @@ class StepEditor(tk.Toplevel):
         self.simple_click_offset_x = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_x', '0'))
         self.simple_click_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_y', '0'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
+        self.key_combo_text = tk.StringVar(value=self.step_data.get('action_params', {}).get('key_combo', 'ctrl+c'))
+        self.variable_name = tk.StringVar(value=self.step_data.get('action_params', {}).get('variable_name', ''))
+        self.variable_value = tk.StringVar(value=self.step_data.get('action_params', {}).get('variable_value', ''))
+        self.output_variable_name = tk.StringVar(value=self.step_data.get('action_params', {}).get('output_variable_name', 'ocr_result'))
+        self.ocr_region = self.step_data.get('action_params', {}).get('ocr_region')
+        self.ocr_region_label_var = tk.StringVar(value=self._get_ocr_region_display_text())
         self.scroll_direction = tk.StringVar(value=self.step_data.get('action_params', {}).get('scroll_direction', 'Down'))
         self.scroll_amount = tk.StringVar(value=self.step_data.get('action_params', {}).get('scroll_amount', '5'))
         self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title.get() or ''))
@@ -1296,11 +1371,38 @@ class StepEditor(tk.Toplevel):
         tk.Radiobutton(action_frame, text="Right-click", variable=self.action_type, value="Right-click", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Click with Offset", variable=self.action_type, value="Click with Offset", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Type", variable=self.action_type, value="Type", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Key Combo", variable=self.action_type, value="Key Combo", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Scroll", variable=self.action_type, value="Scroll", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Set Variable", variable=self.action_type, value="Set Variable", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="OCR", variable=self.action_type, value="OCR", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
 
         self.type_entry_frame = tk.Frame(action_frame, bg=self.master.bg_color)
         self.type_entry = tk.Entry(self.type_entry_frame, textvariable=self.text_to_type, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT)
         self.type_entry.pack(fill="x", padx=5, pady=5)
+
+        self.key_combo_frame = tk.Frame(action_frame, bg=self.master.bg_color)
+        tk.Label(self.key_combo_frame, text="Keys (e.g., ctrl+alt+delete):", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        self.key_combo_entry = tk.Entry(self.key_combo_frame, textvariable=self.key_combo_text, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=20)
+        self.key_combo_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
+
+        self.set_variable_frame = tk.Frame(action_frame, bg=self.master.bg_color)
+        tk.Label(self.set_variable_frame, text="Name:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(self.set_variable_frame, textvariable=self.variable_name, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=15).pack(side="left", padx=5)
+        tk.Label(self.set_variable_frame, text="Value:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(self.set_variable_frame, textvariable=self.variable_value, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=20).pack(side="left", padx=5)
+
+        self.ocr_frame = tk.Frame(action_frame, bg=self.master.bg_color)
+        ocr_var_frame = tk.Frame(self.ocr_frame, bg=self.master.bg_color)
+        tk.Label(ocr_var_frame, text="Save Text to Variable:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(ocr_var_frame, textvariable=self.output_variable_name, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=20).pack(side="left", padx=5)
+        ocr_var_frame.pack(fill="x", pady=2)
+
+        ocr_region_frame = tk.Frame(self.ocr_frame, bg=self.master.bg_color)
+        self.ocr_region_label = tk.Label(ocr_region_frame, textvariable=self.ocr_region_label_var, bg=self.master.widget_bg_color, fg=self.master.text_color, wraplength=350)
+        self.ocr_region_label.pack(side="left", fill="x", expand=True, padx=5)
+        tk.Button(ocr_region_frame, text="Set Region", command=self.set_ocr_region, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left", padx=(0, 5))
+        ocr_region_frame.pack(fill="x", pady=2)
+
 
         self.simple_offset_frame = tk.Frame(action_frame, bg=self.master.bg_color)
         simple_offset_x_frame = tk.Frame(self.simple_offset_frame, bg=self.master.bg_color)
@@ -1553,13 +1655,21 @@ class StepEditor(tk.Toplevel):
         self.type_entry_frame.pack_forget()
         self.simple_offset_frame.pack_forget()
         self.scroll_frame.pack_forget()
+        self.key_combo_frame.pack_forget()
+        self.set_variable_frame.pack_forget()
 
         if action == "Type":
             self.type_entry_frame.pack(fill="x", padx=5, pady=2)
         elif action == "Click with Offset":
             self.simple_offset_frame.pack(fill="x", padx=15, pady=2)
+        elif action == "Key Combo":
+            self.key_combo_frame.pack(fill="x", padx=5, pady=2)
         elif action == "Scroll":
             self.scroll_frame.pack(fill="x", padx=15, pady=2)
+        elif action == "Set Variable":
+            self.set_variable_frame.pack(fill="x", padx=5, pady=2)
+        elif action == "OCR":
+            self.ocr_frame.pack(fill="x", padx=5, pady=2)
 
     def on_fallback_action_change(self):
         action = self.fallback_action_type.get()
@@ -1631,6 +1741,17 @@ class StepEditor(tk.Toplevel):
             action_type = step['action_type']
             if action_type == 'Type':
                 step['action_params']['text'] = self.text_to_type.get()
+            elif action_type == 'Key Combo':
+                step['action_params']['key_combo'] = self.key_combo_text.get()
+            elif action_type == 'Set Variable':
+                step['action_params']['variable_name'] = self.variable_name.get()
+                step['action_params']['variable_value'] = self.variable_value.get()
+            elif action_type == 'OCR':
+                step['action_params']['output_variable_name'] = self.output_variable_name.get()
+                step['action_params']['ocr_region'] = self.ocr_region
+                if not self.ocr_region:
+                    self.master.log("Error: OCR region is not set for this step.")
+                    return
             elif action_type == 'Click with Offset':
                 try:
                     step['action_params']['click_offset_x'] = int(self.simple_click_offset_x.get())
@@ -1894,6 +2015,22 @@ class StepEditor(tk.Toplevel):
         for target in targets:
             # The saved value might be a full path, so we take the basename
             listbox.insert(tk.END, os.path.basename(target))
+
+    def _get_ocr_region_display_text(self):
+        region = self.ocr_region
+        if region:
+            return f"OCR Region: X={region['x']}, Y={region['y']}, W={region['width']}, H={region['height']}"
+        return "Not set. Click 'Set Region' to define the area to read."
+
+    def set_ocr_region(self):
+        self.master.log("Opening region selector for OCR...")
+        RegionSelector(self, self.on_ocr_region_selected)
+
+    def on_ocr_region_selected(self, region):
+        self.ocr_region = region
+        self.ocr_region_label_var.set(self._get_ocr_region_display_text())
+        self.master.log("OCR region set.")
+
 
 class HotkeyChangeDialog(tk.Toplevel):
     def __init__(self, master):
