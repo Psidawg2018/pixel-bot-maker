@@ -144,7 +144,7 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ## 🛣️ Roadmap
 
-### ✅ Completed (v0.1 – v0.6)
+### ✅ Completed (v0.1 – v0.7)
 - [x] Core action sequencer (click, type, click offset, drag, fallback logic)
 - [x] Conditional loops with fallback actions
 - [x] Save/load sequences
@@ -156,19 +156,11 @@ Here’s a "Hello World" style tutorial to get you started:
 - [x] Image Similarity Threshold (fuzzy matching)
 - [x] Screen Region Locking: Restrict actions to specific areas
 - [x] Right-click Actions
-
----
-
-### ✅ v0.6 – Core Automation Expansion (Completed)
 - [x] Mouse Wheel Actions (scrolling support)
 - [x] Keyboard Shortcuts: Key combos (Ctrl+Alt+Del, etc.)
-
----
-
-### ⚡ v0.7 – Logic & Intelligence
 - [x] If/Else Chains (multi-branch logic)
 - [x] Variable System: Simple text variables
- - [x] Counter Variables (track action counts)
+- [x] Counter Variables (track action counts)
 - [x] Time-based Conditions (scheduled logic)
 - [x] Success/Failure Tracking (log pass/fail, allow retry/skip)
 - [x] OCR Support (text recognition for UI elements)
