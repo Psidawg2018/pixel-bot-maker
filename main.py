@@ -136,7 +136,6 @@ class App(tk.Tk):
         # --- Final Controls ---
         controls_frame = ttk.LabelFrame(main_tab, text="Global Target", padding="10")
         controls_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-
         self.target_window_label = ttk.Label(controls_frame, textvariable=self.target_window_title, wraplength=380, justify="left", style="Card.TLabel")
         self.target_window_label.pack(pady=5, fill="x", expand=True, ipady=5)
         ttk.Button(controls_frame, text="Change Target Window", command=self.prompt_for_window_selection).pack(pady=(10,5))
