@@ -2018,7 +2018,8 @@ class StepEditor(tk.Toplevel):
 
     def _get_ocr_region_display_text(self):
         region = self.ocr_region
-        if region:
+        # Defensively check if region is a dictionary and has the required keys
+        if isinstance(region, dict) and all(k in region for k in ['x', 'y', 'width', 'height']):
             return f"OCR Region: X={region['x']}, Y={region['y']}, W={region['width']}, H={region['height']}"
         return "Not set. Click 'Set Region' to define the area to read."
 
