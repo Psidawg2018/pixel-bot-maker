@@ -40,7 +40,7 @@ def _parse_key_string(key_string):
             # It's a special key, check if it's a modifier
             key_obj = KEY_MAP[part]
             if key_obj in [Key.ctrl, Key.alt, Key.shift, Key.cmd]:
-                 modifiers.append(key_obj)
+                modifiers.append(key_obj)
             else:
                 # It's a special key but not a modifier (e.g., 'delete', 'enter')
                 if main_key is not None:

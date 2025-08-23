@@ -344,6 +344,11 @@ class App(tk.Tk):
                     text += f"LOOP: Repeat {repeat_count} times"
                 else:
                     text += f"LOOP: Until condition"
+            elif step_type == 'time_based_condition':
+                time_cond = step.get('time_condition', {})
+                hour = time_cond.get('hour', '??')
+                minute = time_cond.get('minute', '??')
+                text += f"TIME CONDITION: at {hour:02d}:{minute:02d}"
             else:
                 text += "Unknown Step Type"
 
@@ -711,6 +716,8 @@ class App(tk.Tk):
             self._execute_loop_step(current_step, step_context)
         elif step_type == 'conditional_loop':
             self._execute_conditional_loop_step(current_step, step_context)
+        elif step_type == 'time_based_condition':
+            self._execute_time_based_condition_step(current_step, step_context)
         else:
             self.log(f"Error: Unknown step type '{step_type}' at {step_number_str}. Stopping bot.")
             self.toggle_bot()
@@ -1094,6 +1101,29 @@ class App(tk.Tk):
         self.log(f"Unknown fallback action type: {action_type}")
         return False
 
+    def _execute_time_based_condition_step(self, step, context):
+        time_cond = step.get('time_condition', {})
+        hour = time_cond.get('hour')
+        minute = time_cond.get('minute')
+
+        if hour is None or minute is None:
+            self.log(f"Error in {context['number_str']}: Invalid time condition. Stopping bot.")
+            self.toggle_bot()
+            return
+
+        now = time.localtime()
+        if now.tm_hour == hour and now.tm_min == minute:
+            self.log(f"Time condition met: {hour:02d}:{minute:02d}. Executing actions.")
+            # Advance the parent sequence *before* pushing a new one.
+            self.execution_stack[-1] = (context['sequence'], context['index'] + 1)
+            actions = step.get('actions', [])
+            if actions:
+                self.execution_stack.append((actions, 0))
+            self.scan_job = self.after(10, self.run_scan_loop)
+        else:
+            self.log(f"Waiting for time condition: {hour:02d}:{minute:02d}. Current time: {now.tm_hour:02d}:{now.tm_min:02d}. Re-checking in 30 seconds.")
+            self.scan_job = self.after(30000, self.run_scan_loop)
+
     def log(self, message):
         timestamp = time.strftime("%H:%M:%S")
         self.log_area.insert(tk.END, f"[{timestamp}] {message}\n")
@@ -1413,6 +1443,10 @@ class StepEditor(tk.Toplevel):
         self.loop_actions = self.step_data.get('loop_actions', [])
         self.loop_max_retries = tk.StringVar(value=self.step_data.get('max_retries', '10'))
 
+        # Vars for Time-based Condition
+        self.time_condition_hour = tk.StringVar(value=self.step_data.get('time_condition', {}).get('hour', '12'))
+        self.time_condition_minute = tk.StringVar(value=self.step_data.get('time_condition', {}).get('minute', '00'))
+
         # Vars for Post-Action Wait
         wait_params = self.step_data.get('wait_params', {})
         self.wait_type = tk.StringVar(value=wait_params.get('type', 'None'))
@@ -1434,7 +1468,7 @@ class StepEditor(tk.Toplevel):
         step_type_frame = tk.LabelFrame(content_frame, text="Step Type", bg=self.app.bg_color, fg=self.app.text_color, padx=5, pady=5)
         step_type_frame.pack(pady=10, padx=10, fill="x")
         self.step_type_radios = {}
-        step_types = [("Simple Action", "simple"), ("If/Else", "conditional_branch"), ("Loop", "loop"), ("Conditional (Legacy)", "conditional_loop")]
+        step_types = [("Simple Action", "simple"), ("If/Else", "conditional_branch"), ("Loop", "loop"), ("Time-based Condition", "time_based_condition"),("Conditional (Legacy)", "conditional_loop")]
         for text, value in step_types:
             radio = tk.Radiobutton(step_type_frame, text=text, variable=self.step_type, value=value, command=self.on_step_type_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color)
             radio.pack(side="left", padx=5)
@@ -1446,6 +1480,7 @@ class StepEditor(tk.Toplevel):
         self.conditional_loop_frame = tk.Frame(content_frame, bg=self.app.bg_color)
         self.loop_frame = tk.Frame(content_frame, bg=self.app.bg_color)
         self.conditional_branch_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.time_based_condition_frame = tk.Frame(content_frame, bg=self.app.bg_color)
 
         # --- UI for Simple Action Frame ---
         self.build_simple_action_ui(self.simple_action_frame)
@@ -1458,6 +1493,9 @@ class StepEditor(tk.Toplevel):
 
         # --- UI for Conditional Branch Frame ---
         self.build_conditional_branch_ui(self.conditional_branch_frame)
+
+        # --- UI for Time-based Condition Frame ---
+        self.build_time_based_condition_ui(self.time_based_condition_frame)
 
         # --- Save/Cancel Buttons (parented to button_frame) ---
         tk.Button(button_frame, text="Cancel", command=self.destroy, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=10).pack(side="right", padx=10)
@@ -1851,6 +1889,22 @@ class StepEditor(tk.Toplevel):
         self.on_else_action_select(None)
 
 
+    def _add_time_based_action(self):
+        self._open_sub_editor(self.step_data.get('actions', []), self._update_time_based_actions_listbox)
+
+    def _edit_time_based_action(self):
+        self._open_sub_editor(self.step_data.get('actions', []), self._update_time_based_actions_listbox, self.time_based_actions_listbox.curselection())
+
+    def _remove_time_based_action(self):
+        self._remove_action_from_branch(self.step_data.get('actions', []), self.time_based_actions_listbox.curselection(), self._update_time_based_actions_listbox)
+
+    def _update_time_based_actions_listbox(self):
+        self._update_branch_listbox(self.time_based_actions_listbox, self.step_data.get('actions', []))
+        self.time_based_actions_listbox.bind("<<ListboxSelect>>", self.on_time_based_action_select)
+
+    def on_time_based_action_select(self, event):
+        self._update_button_state(self.time_based_actions_listbox.curselection(), self.edit_time_based_action_button, self.remove_time_based_action_button)
+
     def _add_loop_action(self):
         StepEditor(
             master=self.master,
@@ -1914,6 +1968,35 @@ class StepEditor(tk.Toplevel):
 
 
 
+    def build_time_based_condition_ui(self, parent_frame):
+        # --- Time Settings ---
+        time_frame = tk.LabelFrame(parent_frame, text="Time Condition", bg=self.app.bg_color, fg=self.app.text_color, padx=5, pady=5)
+        time_frame.pack(pady=5, padx=10, fill="x")
+        tk.Label(time_frame, text="Hour (0-23):", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
+        tk.Entry(time_frame, textvariable=self.time_condition_hour, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=5).pack(side="left", padx=5)
+        tk.Label(time_frame, text="Minute (0-59):", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
+        tk.Entry(time_frame, textvariable=self.time_condition_minute, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=5).pack(side="left", padx=5)
+
+        actions_frame = tk.LabelFrame(parent_frame, text="Actions to run at specified time", bg=self.app.bg_color, fg=self.app.text_color, padx=5, pady=5)
+        actions_frame.pack(pady=5, padx=10, fill="both", expand=True)
+
+        list_container = tk.Frame(actions_frame, bg=self.app.bg_color)
+        list_container.pack(fill="both", expand=True)
+
+        self.time_based_actions_listbox = tk.Listbox(list_container, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, height=6)
+        self.time_based_actions_listbox.pack(side="left", fill="both", expand=True)
+
+        seq_button_frame = tk.Frame(list_container, bg=self.app.bg_color)
+        seq_button_frame.pack(side="left", padx=(5,0), fill="y")
+
+        tk.Button(seq_button_frame, text="Add", command=self._add_time_based_action, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT).pack(pady=2, fill="x")
+        self.edit_time_based_action_button = tk.Button(seq_button_frame, text="Edit", command=self._edit_time_based_action, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, state=tk.DISABLED)
+        self.edit_time_based_action_button.pack(pady=2, fill="x")
+        self.remove_time_based_action_button = tk.Button(seq_button_frame, text="Remove", command=self._remove_time_based_action, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, state=tk.DISABLED)
+        self.remove_time_based_action_button.pack(pady=2, fill="x")
+
+        self._update_time_based_actions_listbox()
+
     def on_step_type_change(self):
         step_type = self.step_type.get()
         # Hide all frames first
@@ -1921,6 +2004,7 @@ class StepEditor(tk.Toplevel):
         self.conditional_loop_frame.pack_forget()
         self.loop_frame.pack_forget()
         self.conditional_branch_frame.pack_forget()
+        self.time_based_condition_frame.pack_forget()
 
         if step_type == 'simple':
             self.simple_action_frame.pack(fill="x", expand=True, padx=10)
@@ -1928,6 +2012,8 @@ class StepEditor(tk.Toplevel):
             self.loop_frame.pack(fill="x", expand=True, padx=10)
         elif step_type == 'conditional_branch':
             self.conditional_branch_frame.pack(fill="x", expand=True, padx=10)
+        elif step_type == 'time_based_condition':
+            self.time_based_condition_frame.pack(fill="x", expand=True, padx=10)
         else: # conditional_loop
             self.conditional_loop_frame.pack(fill="x", expand=True, padx=10)
 
@@ -2122,6 +2208,22 @@ class StepEditor(tk.Toplevel):
                 "window_title": self.target_window_title.get(), # Retain for consistency, though not used by parent
             }
 
+        elif step_type == 'time_based_condition':
+            try:
+                hour = int(self.time_condition_hour.get())
+                minute = int(self.time_condition_minute.get())
+                if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                    raise ValueError("Hour must be between 0-23 and minute between 0-59.")
+            except ValueError as e:
+                self.app.log(f"Error: Invalid time condition. {e}")
+                return
+
+            step = {
+                "step_type": "time_based_condition",
+                "time_condition": {"hour": hour, "minute": minute},
+                "actions": self.step_data.get('actions', []),
+                "window_title": self.target_window_title.get(),
+            }
         else: # conditional_loop
             try:
                 max_retries = int(self.max_retries.get())
