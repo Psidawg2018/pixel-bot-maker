@@ -2139,22 +2139,22 @@ class StepEditor(tk.Toplevel):
 
     def on_window_selected(self, title):
         self.target_window_title.set(title)
-        self.master.log(f"Step editor window target set to: {title}")
+        self.app.log(f"Step editor window target set to: {title}")
 
     def sample_color(self):
         ColorSampler(self)
 
     def on_color_sampled(self, bgr_color):
         self.target_color_bgr = bgr_color
-        hex_color = self.master._bgr_to_hex(bgr_color)
+        hex_color = self.app._bgr_to_hex(bgr_color)
         self.color_preview.config(bg=hex_color)
-        self.master.log(f"Step color changed to {hex_color}")
+        self.app.log(f"Step color changed to {hex_color}")
 
     def take_screenshot(self):
         ScreenshotTaker(self)
 
     def on_screenshot_taken(self, image):
-        self.master.log("Screenshot captured for step.")
+        self.app.log("Screenshot captured for step.")
         filepath = filedialog.asksaveasfilename(
             parent=self,
             initialdir="templates",
@@ -2165,14 +2165,14 @@ class StepEditor(tk.Toplevel):
         if filepath:
             try:
                 cv2.imwrite(filepath, image)
-                self.master.log(f"Template saved to {filepath}")
+                self.app.log(f"Template saved to {filepath}")
 
                 # This method is now only called from the simple action editor,
                 # so we can assume it's for the main image listbox.
                 self.image_listbox.insert(tk.END, os.path.basename(filepath))
 
             except Exception as e:
-                self.master.log(f"Error saving template: {e}")
+                self.app.log(f"Error saving template: {e}")
 
     def _get_region_display_text(self):
         region = self.search_region
@@ -2181,7 +2181,7 @@ class StepEditor(tk.Toplevel):
         return "Not set. The entire target window will be searched."
 
     def set_search_region(self):
-        self.master.log("Opening region selector...")
+        self.app.log("Opening region selector...")
         RegionSelector(self, self.on_region_selected)
 
     def on_region_selected(self, region):
@@ -2195,19 +2195,19 @@ class StepEditor(tk.Toplevel):
                     win = target_windows[0]
                     region['x'] -= win.left
                     region['y'] -= win.top
-                    self.master.log(f"Region coordinates adjusted to be relative to window '{win.title}'.")
+                    self.app.log(f"Region coordinates adjusted to be relative to window '{win.title}'.")
 
         except Exception as e:
-            self.master.log(f"Could not adjust region to window: {e}. Using absolute coordinates.")
+            self.app.log(f"Could not adjust region to window: {e}. Using absolute coordinates.")
 
         self.search_region = region
         self.search_region_label_var.set(self._get_region_display_text())
-        self.master.log(f"Search region set.")
+        self.app.log(f"Search region set.")
 
     def clear_search_region(self):
         self.search_region = None
         self.search_region_label_var.set(self._get_region_display_text())
-        self.master.log("Search region has been cleared.")
+        self.app.log("Search region has been cleared.")
 
     def _add_image_template_to_listbox(self, listbox):
         filepaths = filedialog.askopenfilenames(
@@ -2261,13 +2261,13 @@ class StepEditor(tk.Toplevel):
         return "Not set. Click 'Set Region' to define the area to read."
 
     def set_ocr_region(self):
-        self.master.log("Opening region selector for OCR...")
+        self.app.log("Opening region selector for OCR...")
         RegionSelector(self, self.on_ocr_region_selected)
 
     def on_ocr_region_selected(self, region):
         self.ocr_region = region
         self.ocr_region_label_var.set(self._get_ocr_region_display_text())
-        self.master.log("OCR region set.")
+        self.app.log("OCR region set.")
 
 
 class HotkeyChangeDialog(tk.Toplevel):
