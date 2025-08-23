@@ -1,6 +1,96 @@
 from pynput.mouse import Button, Controller as MouseController
-from pynput.keyboard import Controller as KeyboardController
+from pynput.keyboard import Key, Controller as KeyboardController
 import time
+
+# --- Key Mapping ---
+# Maps string representations to pynput Key objects
+KEY_MAP = {
+    'alt': Key.alt, 'alt_l': Key.alt_l, 'alt_r': Key.alt_r,
+    'alt_gr': Key.alt_gr, 'backspace': Key.backspace, 'caps_lock': Key.caps_lock,
+    'cmd': Key.cmd, 'cmd_l': Key.cmd_l, 'cmd_r': Key.cmd_r,
+    'ctrl': Key.ctrl, 'ctrl_l': Key.ctrl_l, 'ctrl_r': Key.ctrl_r,
+    'delete': Key.delete, 'down': Key.down, 'end': Key.end,
+    'enter': Key.enter, 'esc': Key.esc, 'f1': Key.f1, 'f2': Key.f2,
+    'f3': Key.f3, 'f4': Key.f4, 'f5': Key.f5, 'f6': Key.f6, 'f7': Key.f7,
+    'f8': Key.f8, 'f9': Key.f9, 'f10': Key.f10, 'f11': Key.f11,
+    'f12': Key.f12, 'f13': Key.f13, 'f14': Key.f14, 'f15': Key.f15,
+    'f16': Key.f16, 'f17': Key.f17, 'f18': Key.f18, 'f19': Key.f19,
+    'f20': Key.f20, 'home': Key.home, 'left': Key.left,
+    'page_down': Key.page_down, 'page_up': Key.page_up, 'right': Key.right,
+    'shift': Key.shift, 'shift_l': Key.shift_l, 'shift_r': Key.shift_r,
+    'space': Key.space, 'tab': Key.tab, 'up': Key.up,
+    'media_play_pause': Key.media_play_pause, 'media_volume_mute': Key.media_volume_mute,
+    'media_volume_down': Key.media_volume_down, 'media_volume_up': Key.media_volume_up,
+    'media_previous': Key.media_previous, 'media_next': Key.media_next,
+    'insert': Key.insert, 'menu': Key.menu, 'num_lock': Key.num_lock,
+    'pause': Key.pause, 'print_screen': Key.print_screen, 'scroll_lock': Key.scroll_lock
+}
+
+def _parse_key_string(key_string):
+    """
+    Parses a user-friendly key combination string (e.g., 'ctrl+alt+delete')
+    into a list of modifier keys and a single main key.
+    """
+    parts = [part.strip().lower() for part in key_string.split('+')]
+    modifiers = []
+    main_key = None
+
+    for part in parts:
+        if part in KEY_MAP:
+            # It's a special key, check if it's a modifier
+            key_obj = KEY_MAP[part]
+            if key_obj in [Key.ctrl, Key.alt, Key.shift, Key.cmd]:
+                 modifiers.append(key_obj)
+            else:
+                # It's a special key but not a modifier (e.g., 'delete', 'enter')
+                if main_key is not None:
+                    raise ValueError(f"Invalid key combination: Cannot have more than one non-modifier key. Found '{main_key}' and '{part}'.")
+                main_key = key_obj
+        elif len(part) == 1:
+            # It's a regular character key
+            if main_key is not None:
+                raise ValueError(f"Invalid key combination: Cannot have more than one non-modifier key. Found '{main_key}' and '{part}'.")
+            main_key = part
+        else:
+            raise ValueError(f"Invalid key part: '{part}' in '{key_string}'")
+
+    if main_key is None:
+        raise ValueError(f"Invalid key combination: No main key found in '{key_string}'.")
+
+    return modifiers, main_key
+
+
+def press_key_combination(key_string):
+    """
+    Presses a combination of keys, like "ctrl+c" or "alt+f4".
+
+    :param key_string: A string representing the key combination (e.g., "ctrl+alt+delete").
+    """
+    keyboard = KeyboardController()
+    try:
+        modifiers, main_key = _parse_key_string(key_string)
+
+        # Press all modifier keys
+        for mod in modifiers:
+            keyboard.press(mod)
+
+        # Press and release the main key
+        keyboard.press(main_key)
+        keyboard.release(main_key)
+
+        # Release all modifier keys in reverse order
+        for mod in reversed(modifiers):
+            keyboard.release(mod)
+
+        print(f"Pressed key combination: '{key_string}'")
+        return True
+    except ValueError as e:
+        print(f"Error pressing key combination '{key_string}': {e}")
+        return False
+    except Exception as e:
+        print(f"An unexpected error occurred while pressing keys: {e}")
+        return False
+
 
 def click_at(x, y):
     """
@@ -116,6 +206,25 @@ if __name__ == '__main__':
 
     print("\nTesting scroll up...")
     scroll_wheel('up', 5)
+    time.sleep(1)
+
+    # Test key combinations
+    print("\nTesting key combinations...")
+    print("Test 1: 'ctrl+a' (select all)")
+    press_key_combination('ctrl+a')
+    time.sleep(1)
+
+    print("Test 2: 'delete'")
+    press_key_combination('delete')
+    time.sleep(1)
+
+    print("Test 3: 'alt+f4' (This would close the window, so we'll just print)")
+    print("(Skipping alt+f4 to not close the test)...")
+    # press_key_combination('alt+f4')
+    time.sleep(1)
+
+    print("Test 4: Invalid combo 'ctrl+alt+shift'")
+    press_key_combination('ctrl+alt+shift')
     time.sleep(1)
 
     print("\nAutomation test script finished.")
