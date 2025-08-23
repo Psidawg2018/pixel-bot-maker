@@ -25,6 +25,7 @@ Pixel Bot Maker is a user-friendly tool designed for creating simple automation 
   - **Type:** Find a target and then type a specified text string.
   - **Key Combo:** Perform a keyboard shortcut. To use this, type the key names as a string (e.g., `ctrl+c`, `alt+f4`, `ctrl+alt+delete`).
   - **Set Variable:** Create a variable to store text that can be used in other actions. For example, set a variable named `username` to the value `test_user`.
+  - **OCR:** Read text from a defined screen region and save it to a variable.
 - **Variable Usage:** Use the `{{variable_name}}` syntax in the text fields of other actions (like "Type" or "Key Combo") to substitute the stored value.
 - **Loop Controls:**
   - **Repeat X Times:** Create a loop that executes a sequence of sub-actions a specified number of times.
@@ -81,6 +82,10 @@ Here’s a "Hello World" style tutorial to get you started:
     - The bot will now search for the image you selected and click it.
 
 ## Changelog
+
+### v0.7.1 - (2025-08-22)
+- **OCR Support.**
+- Added an **OCR** action to read text from a specific screen region and save it to a variable.
 
 ### v0.7.0 - (2025-08-22)
 - **Variable System.**
@@ -167,7 +172,7 @@ Here’s a "Hello World" style tutorial to get you started:
 - [ ] Counter Variables (track action counts)
 - [ ] Time-based Conditions (scheduled logic)
 - [ ] Success/Failure Tracking (log pass/fail, allow retry/skip)
-- [ ] OCR Support (text recognition for UI elements)
+- [x] OCR Support (text recognition for UI elements)
 
 ---
 
