@@ -314,13 +314,24 @@ class App(tk.Tk):
         self.sequence_listbox.delete(0, tk.END)
         for i, step in enumerate(self.action_sequence):
             step_type = step.get('step_type', 'simple')
+            action_type = step.get('action_type') # Get action_type for simple steps
             text = f"{i+1}: "
 
             if step_type == 'simple':
-                mode = step.get('detection_mode', '?')
-                action = step.get('action_type', '?')
-                target = step.get('detection_target_name', 'Unknown')
-                text += f"Find {mode} '{target}', then {action}"
+                if action_type == 'Set Variable':
+                    params = step.get('action_params', {})
+                    text += f"Set Var: '{params.get('variable_name', 'N/A')}' = '{params.get('variable_value', 'N/A')}'"
+                elif action_type == 'Modify Variable':
+                    params = step.get('action_params', {})
+                    text += f"Modify Var: '{params.get('modify_variable_name', 'N/A')}' {params.get('modify_variable_operation', '?')} {params.get('modify_variable_value', '?')}"
+                elif action_type == 'OCR':
+                    params = step.get('action_params', {})
+                    text += f"OCR to Var: '{params.get('output_variable_name', 'N/A')}'"
+                else:
+                    mode = step.get('detection_mode', '?')
+                    action = step.get('action_type', '?')
+                    target = step.get('detection_target_name', 'Unknown')
+                    text += f"Find {mode} '{target}', then {action}"
             elif step_type == 'conditional_loop':
                 primary_target_name = step.get('primary_target', {}).get('detection_target_name', 'N/A')
                 fallback_action = step.get('on_fail', {}).get('action_type', 'N/A')
@@ -603,6 +614,48 @@ class App(tk.Tk):
             else:
                 self.log(f"Error in {step_number_str}: 'Set Variable' action has no variable name. Stopping bot.")
                 self.toggle_bot()
+            return
+        elif action_type == 'Modify Variable':
+            params = current_step.get('action_params', {})
+            var_name = params.get('modify_variable_name')
+            operation = params.get('modify_variable_operation')
+            value_str = self._substitute_variables(params.get('modify_variable_value', '0'))
+
+            if not var_name:
+                self.log(f"Error in {step_number_str}: 'Modify Variable' action has no variable name. Stopping bot.")
+                self.toggle_bot()
+                return
+
+            current_value_str = self.variables.get(var_name, '0')
+
+            if operation == 'set':
+                self.variables[var_name] = value_str
+                self.log(f"Set variable '{var_name}' to '{value_str}'")
+            else: # add or subtract
+                try:
+                    current_value = float(current_value_str)
+                    value_to_op = float(value_str)
+                    new_value = 0
+                    if operation == 'add':
+                        new_value = current_value + value_to_op
+                    elif operation == 'subtract':
+                        new_value = current_value - value_to_op
+
+                    # Store as int if it's a whole number, otherwise float
+                    if new_value == int(new_value):
+                        self.variables[var_name] = str(int(new_value))
+                    else:
+                        self.variables[var_name] = str(new_value)
+
+                    self.log(f"Variable '{var_name}' {operation}ed by {value_to_op}. New value: {self.variables[var_name]}")
+
+                except ValueError:
+                    self.log(f"Error in {step_number_str}: Cannot perform arithmetic on non-numeric variable '{var_name}' (value: '{current_value_str}') or input '{value_str}'. Stopping bot.")
+                    self.toggle_bot()
+                    return
+
+            self.execution_stack[-1] = (current_sequence, current_index + 1)
+            self._handle_post_action_wait(current_step)
             return
         elif action_type == 'OCR':
             params = current_step.get('action_params', {})
@@ -1313,6 +1366,9 @@ class StepEditor(tk.Toplevel):
         self.key_combo_text = tk.StringVar(value=self.step_data.get('action_params', {}).get('key_combo', 'ctrl+c'))
         self.variable_name = tk.StringVar(value=self.step_data.get('action_params', {}).get('variable_name', ''))
         self.variable_value = tk.StringVar(value=self.step_data.get('action_params', {}).get('variable_value', ''))
+        self.modify_variable_name = tk.StringVar(value=self.step_data.get('action_params', {}).get('modify_variable_name', ''))
+        self.modify_variable_operation = tk.StringVar(value=self.step_data.get('action_params', {}).get('modify_variable_operation', 'add'))
+        self.modify_variable_value = tk.StringVar(value=self.step_data.get('action_params', {}).get('modify_variable_value', '1'))
         self.output_variable_name = tk.StringVar(value=self.step_data.get('action_params', {}).get('output_variable_name', 'ocr_result'))
         self.ocr_region = self.step_data.get('action_params', {}).get('ocr_region')
         self.ocr_region_label_var = tk.StringVar(value=self._get_ocr_region_display_text())
@@ -1463,6 +1519,7 @@ class StepEditor(tk.Toplevel):
         tk.Radiobutton(action_frame, text="Key Combo", variable=self.action_type, value="Key Combo", command=self.on_action_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Scroll", variable=self.action_type, value="Scroll", command=self.on_action_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="Set Variable", variable=self.action_type, value="Set Variable", command=self.on_action_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Modify Variable", variable=self.action_type, value="Modify Variable", command=self.on_action_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="OCR", variable=self.action_type, value="OCR", command=self.on_action_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
 
         self.type_entry_frame = tk.Frame(action_frame, bg=self.app.bg_color)
@@ -1479,6 +1536,14 @@ class StepEditor(tk.Toplevel):
         tk.Entry(self.set_variable_frame, textvariable=self.variable_name, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=15).pack(side="left", padx=5)
         tk.Label(self.set_variable_frame, text="Value:", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
         tk.Entry(self.set_variable_frame, textvariable=self.variable_value, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=20).pack(side="left", padx=5)
+
+        self.modify_variable_frame = tk.Frame(action_frame, bg=self.app.bg_color)
+        tk.Label(self.modify_variable_frame, text="Name:", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
+        tk.Entry(self.modify_variable_frame, textvariable=self.modify_variable_name, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=15).pack(side="left", padx=5)
+        operations = ["add", "subtract", "set"]
+        tk.OptionMenu(self.modify_variable_frame, self.modify_variable_operation, *operations).pack(side="left", padx=5)
+        tk.Label(self.modify_variable_frame, text="Value:", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
+        tk.Entry(self.modify_variable_frame, textvariable=self.modify_variable_value, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=15).pack(side="left", padx=5)
 
         self.ocr_frame = tk.Frame(action_frame, bg=self.app.bg_color)
         ocr_var_frame = tk.Frame(self.ocr_frame, bg=self.app.bg_color)
@@ -1881,6 +1946,8 @@ class StepEditor(tk.Toplevel):
         self.scroll_frame.pack_forget()
         self.key_combo_frame.pack_forget()
         self.set_variable_frame.pack_forget()
+        self.modify_variable_frame.pack_forget()
+        self.ocr_frame.pack_forget()
 
         if action == "Type":
             self.type_entry_frame.pack(fill="x", padx=5, pady=2)
@@ -1892,6 +1959,8 @@ class StepEditor(tk.Toplevel):
             self.scroll_frame.pack(fill="x", padx=15, pady=2)
         elif action == "Set Variable":
             self.set_variable_frame.pack(fill="x", padx=5, pady=2)
+        elif action == "Modify Variable":
+            self.modify_variable_frame.pack(fill="x", padx=5, pady=2)
         elif action == "OCR":
             self.ocr_frame.pack(fill="x", padx=5, pady=2)
 
@@ -1970,6 +2039,10 @@ class StepEditor(tk.Toplevel):
             elif action_type == 'Set Variable':
                 step['action_params']['variable_name'] = self.variable_name.get()
                 step['action_params']['variable_value'] = self.variable_value.get()
+            elif action_type == 'Modify Variable':
+                step['action_params']['modify_variable_name'] = self.modify_variable_name.get()
+                step['action_params']['modify_variable_operation'] = self.modify_variable_operation.get()
+                step['action_params']['modify_variable_value'] = self.modify_variable_value.get()
             elif action_type == 'OCR':
                 step['action_params']['output_variable_name'] = self.output_variable_name.get()
                 step['action_params']['ocr_region'] = self.ocr_region
