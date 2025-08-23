@@ -83,6 +83,10 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ## Changelog
 
+### v0.7.2 - (2025-08-22)
+- **If/Else Chains.**
+- Added a new **If/Else** step to allow for conditional branching in automation sequences.
+
 ### v0.7.1 - (2025-08-22)
 - **OCR Support.**
 - Added an **OCR** action to read text from a specific screen region and save it to a variable.
@@ -167,7 +171,7 @@ Here’s a "Hello World" style tutorial to get you started:
 ---
 
 ### ⚡ v0.7 – Logic & Intelligence
-- [ ] If/Else Chains (multi-branch logic)
+- [x] If/Else Chains (multi-branch logic)
 - [x] Variable System: Simple text variables
 - [ ] Counter Variables (track action counts)
 - [ ] Time-based Conditions (scheduled logic)

@@ -44,7 +44,7 @@ class App(tk.Tk):
         self.hotkey_listener = None
         self.action_sequence = []
         self.variables = {} # For the new variable system
-        self.current_step_index = 0
+        self.execution_stack = [] # (sequence, index)
         self.current_retry_count = 0
         self.hide_window_var = tk.BooleanVar(value=self.settings_manager.get_setting('hide_bot_default'))
         self.target_window_title = tk.StringVar()
@@ -482,8 +482,8 @@ class App(tk.Tk):
             if not self.action_sequence:
                 self.log("Cannot start: Action sequence is empty.")
                 return
-            self.variables.clear() # Reset variables at the start of a run
-            self.current_step_index = 0
+            self.variables.clear()
+            self.execution_stack = [(self.action_sequence, 0)]
             self.current_retry_count = 0
             self.running = True
             self.start_button.config(text="Stop Bot")
@@ -533,18 +533,63 @@ class App(tk.Tk):
         # Return the value if found, otherwise return the original placeholder
         return self.variables.get(var_name, match.group(0))
 
+    def _evaluate_condition(self, condition):
+        var_name = condition.get('variable', '').strip()
+        operator = condition.get('operator')
+        value_to_compare = self._substitute_variables(condition.get('value', ''))
+
+        if not var_name or not operator:
+            self.log(f"Invalid condition: {condition}")
+            return False
+
+        actual_value = self._substitute_variables(var_name)
+
+        # For numeric comparisons, try to convert both to floats
+        try:
+            num_actual_value = float(actual_value)
+            num_value_to_compare = float(value_to_compare)
+            is_numeric = True
+        except (ValueError, TypeError):
+            is_numeric = False
+
+        if operator == "equals":
+            return actual_value == value_to_compare
+        elif operator == "not equals":
+            return actual_value != value_to_compare
+        elif operator == "contains":
+            return value_to_compare in actual_value
+        elif operator == "not contains":
+            return value_to_compare not in actual_value
+        elif is_numeric:
+            if operator == "is greater than":
+                return num_actual_value > num_value_to_compare
+            elif operator == "is less than":
+                return num_actual_value < num_value_to_compare
+
+        self.log(f"Unsupported operator '{operator}' for non-numeric comparison.")
+        return False
+
+
     def run_scan_loop(self):
         if not self.running:
             return
 
-        if self.current_step_index >= len(self.action_sequence):
+        if not self.execution_stack:
             self.log("Action sequence complete. Stopping bot.")
             self.toggle_bot()
             return
 
-        current_step = self.action_sequence[self.current_step_index]
+        current_sequence, current_index = self.execution_stack[-1]
+
+        if current_index >= len(current_sequence):
+            self.execution_stack.pop()
+            self.scan_job = self.after(10, self.run_scan_loop) # Continue processing parent sequence
+            return
+
+        current_step = current_sequence[current_index]
         step_type = current_step.get('step_type', 'simple')
         action_type = current_step.get('action_type')
+        step_number_str = f"Step {current_index + 1}" # For logging
 
         # Handle non-UI actions first
         if action_type == 'Set Variable':
@@ -553,10 +598,10 @@ class App(tk.Tk):
             if var_name:
                 self.log(f"Setting variable '{var_name}' to '{var_value}'")
                 self.variables[var_name] = var_value
-                self.current_step_index += 1
+                self.execution_stack[-1] = (current_sequence, current_index + 1)
                 self._handle_post_action_wait(current_step) # Still respect wait times
             else:
-                self.log(f"Error in Step {self.current_step_index+1}: 'Set Variable' action has no variable name. Stopping bot.")
+                self.log(f"Error in {step_number_str}: 'Set Variable' action has no variable name. Stopping bot.")
                 self.toggle_bot()
             return
         elif action_type == 'OCR':
@@ -565,7 +610,7 @@ class App(tk.Tk):
             output_var = params.get('output_variable_name')
 
             if not region or not output_var:
-                self.log(f"Error in Step {self.current_step_index+1}: OCR step is not configured correctly. Stopping bot.")
+                self.log(f"Error in {step_number_str}: OCR step is not configured correctly. Stopping bot.")
                 self.toggle_bot()
                 return
 
@@ -581,34 +626,55 @@ class App(tk.Tk):
 
             self.log(f"OCR Result: '{extracted_text}'. Stored in variable '{output_var}'.")
             self.variables[output_var] = extracted_text
-            self.current_step_index += 1
+            self.execution_stack[-1] = (current_sequence, current_index + 1)
             self._handle_post_action_wait(current_step)
             return
 
+        # For other actions, we pass the step and its context
+        step_context = {'sequence': current_sequence, 'index': current_index, 'number_str': step_number_str}
 
         if step_type == 'simple':
-            self._execute_simple_step(current_step)
+            self._execute_simple_step(current_step, step_context)
+        elif step_type == 'conditional_branch':
+            self.log(f"Evaluating condition for {step_number_str}...")
+            # First, advance the parent sequence *before* pushing a new one.
+            self.execution_stack[-1] = (current_sequence, current_index + 1)
+
+            if self._evaluate_condition(current_step.get('condition')):
+                self.log("Condition is TRUE. Executing IF branch.")
+                if_branch = current_step.get('if_branch', [])
+                if if_branch:
+                    self.execution_stack.append((if_branch, 0))
+            else:
+                self.log("Condition is FALSE. Executing ELSE branch.")
+                else_branch = current_step.get('else_branch', [])
+                if else_branch:
+                    self.execution_stack.append((else_branch, 0))
+
+            # Continue to the next loop iteration immediately to process the new stack
+            self.scan_job = self.after(10, self.run_scan_loop)
+            return
         elif step_type == 'loop':
-            self._execute_loop_step(current_step)
+            self._execute_loop_step(current_step, step_context)
         elif step_type == 'conditional_loop':
-            self._execute_conditional_loop_step(current_step)
+            self._execute_conditional_loop_step(current_step, step_context)
         else:
-            self.log(f"Error: Unknown step type '{step_type}' at step {self.current_step_index + 1}. Stopping bot.")
+            self.log(f"Error: Unknown step type '{step_type}' at {step_number_str}. Stopping bot.")
             self.toggle_bot()
 
-    def _execute_loop_step(self, step):
+    def _execute_loop_step(self, step, context):
         loop_mode = step.get('loop_mode', 'repeat')
 
         target_window_title = step.get("window_title")
         if not target_window_title:
-            self.log(f"Error in Loop Step {self.current_step_index+1}: No target window specified. Stopping bot.")
+            self.log(f"Error in {context['number_str']} (Loop): No target window specified. Stopping bot.")
             self.toggle_bot()
             return
 
         try:
             target_windows = gw.getWindowsWithTitle(target_window_title)
             if not target_windows:
-                self.log(f"Step {self.current_step_index+1}: Window '{target_window_title}' not found. Re-scanning...")
+                self.log(f"{context['number_str']} (Loop): Window '{target_window_title}' not found. Re-scanning...")
                 self.scan_job = self.after(2000, self.run_scan_loop)
                 return
             target_window = target_windows[0]
@@ -648,14 +714,15 @@ class App(tk.Tk):
                         return
 
             self.log("Loop finished.")
-            self.current_step_index += 1
+            sequence, index = self.execution_stack[-1]
+            self.execution_stack[-1] = (sequence, index + 1)
             self._handle_post_action_wait(step)
 
         elif loop_mode == 'until':
             max_retries = step.get('max_retries', 10)
             condition_target = step.get('loop_condition_target')
             condition_found = False
-            self.log(f"Executing Loop Step {self.current_step_index + 1}: Looping until '{step.get('loop_condition_target_name')}' is found.")
+            self.log(f"Executing {context['number_str']} (Loop): Looping until '{step.get('loop_condition_target_name')}' is found.")
 
             for i in range(max_retries):
                 if not self.running: return
@@ -692,7 +759,8 @@ class App(tk.Tk):
 
             if condition_found:
                 self.log("Loop finished successfully.")
-                self.current_step_index += 1
+                sequence, index = self.execution_stack[-1]
+                self.execution_stack[-1] = (sequence, index + 1)
                 self._handle_post_action_wait(step)
             else:
                 self.log(f"Loop failed: Condition not met after {max_retries} retries. Stopping bot.")
@@ -778,17 +846,17 @@ class App(tk.Tk):
             self.log("    - Target not found.")
             return False
 
-    def _execute_simple_step(self, step):
+    def _execute_simple_step(self, step, context):
         target_window_title = step.get("window_title")
         if not target_window_title:
-            self.log(f"Error in Step {self.current_step_index+1}: No target window specified. Stopping bot.")
+            self.log(f"Error in {context['number_str']}: No target window specified. Stopping bot.")
             self.toggle_bot()
             return
 
         try:
             target_windows = gw.getWindowsWithTitle(target_window_title)
             if not target_windows:
-                self.log(f"Step {self.current_step_index+1}: Window '{target_window_title}' not found. Re-scanning...")
+                self.log(f"{context['number_str']}: Window '{target_window_title}' not found. Re-scanning...")
                 self.scan_job = self.after(2000, self.run_scan_loop)
                 return
             target_window = target_windows[0]
@@ -813,7 +881,9 @@ class App(tk.Tk):
             return
 
         if self._execute_single_action(step, scan_region):
-            self.current_step_index += 1
+            # On success, advance the index on the current stack frame
+            sequence, index = self.execution_stack[-1]
+            self.execution_stack[-1] = (sequence, index + 1)
             self.current_retry_count = 0 # Reset for next step
             self.log("Action complete.")
             # The wait is handled inside _execute_single_action now
@@ -821,24 +891,24 @@ class App(tk.Tk):
             self.log("Target not found. Re-scanning same step in 2 seconds...")
             self.scan_job = self.after(2000, self.run_scan_loop)
 
-    def _execute_conditional_loop_step(self, step):
+    def _execute_conditional_loop_step(self, step, context):
         max_retries = step.get('max_retries', 5)
         if self.current_retry_count >= max_retries:
-            self.log(f"Loop failed after {max_retries} retries for step {self.current_step_index + 1}. Stopping bot.")
+            self.log(f"Loop failed after {max_retries} retries for {context['number_str']}. Stopping bot.")
             self.toggle_bot()
             return
 
         # The window title for a conditional step is stored in the step itself
         target_window_title = step.get("window_title")
         if not target_window_title:
-            self.log(f"Error in Step {self.current_step_index+1}: No target window specified for conditional loop. Stopping bot.")
+            self.log(f"Error in {context['number_str']} (Conditional): No target window specified. Stopping bot.")
             self.toggle_bot()
             return
 
         try:
             target_windows = gw.getWindowsWithTitle(target_window_title)
             if not target_windows:
-                self.log(f"Step {self.current_step_index+1}: Window '{target_window_title}' not found. Retrying in 2s...")
+                self.log(f"{context['number_str']} (Conditional): Window '{target_window_title}' not found. Retrying in 2s...")
                 self.scan_job = self.after(2000, self.run_scan_loop)
                 return
             target_window = target_windows[0]
@@ -864,7 +934,7 @@ class App(tk.Tk):
 
         # 1. Look for the primary target
         primary_target = step.get('primary_target', {})
-        self.log(f"Loop Step {self.current_step_index+1} (Attempt {self.current_retry_count+1}/{max_retries}): Finding '{primary_target.get('detection_target_name')}'...")
+        self.log(f"{context['number_str']} (Attempt {self.current_retry_count+1}/{max_retries}): Finding '{primary_target.get('detection_target_name')}'...")
         haystack_img = capture_screen(scan_region)
 
         primary_pos = None
@@ -883,7 +953,8 @@ class App(tk.Tk):
             # 2. If found, success! Move to next step.
             self.log("Primary target found! Proceeding to next step.")
             self.current_retry_count = 0
-            self.current_step_index += 1
+            sequence, index = self.execution_stack[-1]
+            self.execution_stack[-1] = (sequence, index + 1)
             self._handle_post_action_wait(step)
         else:
             # 3. If not found, perform fallback action.
@@ -1265,6 +1336,14 @@ class StepEditor(tk.Toplevel):
         self.fallback_drag_offset_x = tk.StringVar(value=self.step_data.get('on_fail', {}).get('action_params', {}).get('drag_offset_x', '0'))
         self.fallback_drag_offset_y = tk.StringVar(value=self.step_data.get('on_fail', {}).get('action_params', {}).get('drag_offset_y', '0'))
 
+        # Vars for Conditional Branch (If/Else)
+        condition = self.step_data.get('condition', {})
+        self.if_variable = tk.StringVar(value=condition.get('variable', ''))
+        self.if_operator = tk.StringVar(value=condition.get('operator', 'equals'))
+        self.if_value = tk.StringVar(value=condition.get('value', ''))
+        self.if_branch = self.step_data.get('if_branch', [])
+        self.else_branch = self.step_data.get('else_branch', [])
+
         # Vars for Loop Step
         self.loop_mode = tk.StringVar(value=self.step_data.get('loop_mode', 'repeat'))
         self.loop_repeat_count = tk.StringVar(value=self.step_data.get('loop_repeat_count', '5'))
@@ -1292,7 +1371,7 @@ class StepEditor(tk.Toplevel):
         step_type_frame = tk.LabelFrame(content_frame, text="Step Type", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         step_type_frame.pack(pady=10, padx=10, fill="x")
         self.step_type_radios = {}
-        step_types = [("Simple Action", "simple"), ("Loop", "loop"), ("Conditional (Legacy)", "conditional_loop")]
+        step_types = [("Simple Action", "simple"), ("If/Else", "conditional_branch"), ("Loop", "loop"), ("Conditional (Legacy)", "conditional_loop")]
         for text, value in step_types:
             radio = tk.Radiobutton(step_type_frame, text=text, variable=self.step_type, value=value, command=self.on_step_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color)
             radio.pack(side="left", padx=5)
@@ -1303,6 +1382,7 @@ class StepEditor(tk.Toplevel):
         self.simple_action_frame = tk.Frame(content_frame, bg=self.master.bg_color)
         self.conditional_loop_frame = tk.Frame(content_frame, bg=self.master.bg_color)
         self.loop_frame = tk.Frame(content_frame, bg=self.master.bg_color)
+        self.conditional_branch_frame = tk.Frame(content_frame, bg=self.master.bg_color)
 
 
         # --- UI for Simple Action Frame ---
@@ -1313,6 +1393,9 @@ class StepEditor(tk.Toplevel):
 
         # --- UI for Loop Frame ---
         self.build_loop_ui(self.loop_frame)
+
+        # --- UI for Conditional Branch Frame ---
+        self.build_conditional_branch_ui(self.conditional_branch_frame)
 
         # --- Save/Cancel Buttons (parented to button_frame) ---
         tk.Button(button_frame, text="Cancel", command=self.destroy, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=10).pack(side="right", padx=10)
@@ -1565,6 +1648,138 @@ class StepEditor(tk.Toplevel):
         self._update_loop_actions_listbox()
         self._update_until_image_listbox()
 
+    def build_conditional_branch_ui(self, parent_frame):
+        # --- Condition Builder ---
+        condition_frame = tk.LabelFrame(parent_frame, text="Condition", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        condition_frame.pack(pady=5, padx=10, fill="x")
+
+        tk.Label(condition_frame, text="If variable", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(condition_frame, textvariable=self.if_variable, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=15).pack(side="left", padx=5)
+
+        operators = ["equals", "not equals", "contains", "not contains", "is greater than", "is less than"]
+        tk.OptionMenu(condition_frame, self.if_operator, *operators).pack(side="left", padx=5)
+
+        tk.Label(condition_frame, text="value", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(condition_frame, textvariable=self.if_value, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=15).pack(side="left", padx=5)
+
+        # --- Branch Frames ---
+        branch_parent_frame = tk.Frame(parent_frame, bg=self.master.bg_color)
+        branch_parent_frame.pack(pady=5, padx=10, fill="both", expand=True)
+
+        # --- IF Branch ---
+        if_frame = self._create_branch_frame(branch_parent_frame, "IF Actions (if condition is true)")
+        self.if_listbox = self._create_branch_listbox(if_frame, self.on_if_action_select)
+        self.if_edit_button, self.if_remove_button = self._create_branch_buttons(
+            if_frame,
+            self._add_if_action,
+            self._edit_if_action,
+            self._remove_if_action
+        )
+        if_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
+
+        # --- ELSE Branch ---
+        else_frame = self._create_branch_frame(branch_parent_frame, "ELSE Actions (optional)")
+        self.else_listbox = self._create_branch_listbox(else_frame, self.on_else_action_select)
+        self.else_edit_button, self.else_remove_button = self._create_branch_buttons(
+            else_frame,
+            self._add_else_action,
+            self._edit_else_action,
+            self._remove_else_action
+        )
+        else_frame.pack(side="right", fill="both", expand=True, padx=(5, 0))
+
+        self._update_if_actions_listbox()
+        self._update_else_actions_listbox()
+
+
+    def _create_branch_frame(self, parent, title):
+        frame = tk.LabelFrame(parent, text=title, bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        return frame
+
+    def _create_branch_listbox(self, parent, select_callback):
+        list_container = tk.Frame(parent, bg=self.master.bg_color)
+        list_container.pack(fill="both", expand=True)
+        listbox = tk.Listbox(list_container, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, height=8)
+        listbox.pack(side="left", fill="both", expand=True)
+        listbox.bind("<<ListboxSelect>>", select_callback)
+        return listbox
+
+    def _create_branch_buttons(self, parent, add_cmd, edit_cmd, remove_cmd):
+        button_frame = tk.Frame(parent.winfo_children()[0], bg=self.master.bg_color) # Get the list_container
+        button_frame.pack(side="left", padx=(5,0), fill="y")
+        tk.Button(button_frame, text="Add", command=add_cmd, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(pady=2, fill="x")
+        edit_button = tk.Button(button_frame, text="Edit", command=edit_cmd, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, state=tk.DISABLED)
+        edit_button.pack(pady=2, fill="x")
+        remove_button = tk.Button(button_frame, text="Remove", command=remove_cmd, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, state=tk.DISABLED)
+        remove_button.pack(pady=2, fill="x")
+        return edit_button, remove_button
+
+    def _add_if_action(self):
+        self._open_sub_editor(self.if_branch, self._update_if_actions_listbox)
+    def _edit_if_action(self):
+        self._open_sub_editor(self.if_branch, self._update_if_actions_listbox, self.if_listbox.curselection())
+    def _remove_if_action(self):
+        self._remove_action_from_branch(self.if_branch, self.if_listbox.curselection(), self._update_if_actions_listbox)
+
+    def _add_else_action(self):
+        self._open_sub_editor(self.else_branch, self._update_else_actions_listbox)
+    def _edit_else_action(self):
+        self._open_sub_editor(self.else_branch, self._update_else_actions_listbox, self.else_listbox.curselection())
+    def _remove_else_action(self):
+        self._remove_action_from_branch(self.else_branch, self.else_listbox.curselection(), self._update_else_actions_listbox)
+
+    def _open_sub_editor(self, branch_list, update_callback, selection=None):
+        index = None
+        step_data = {}
+        if selection:
+            index = selection[0]
+            step_data = branch_list[index]
+        StepEditor(
+            master=self,
+            step_data=step_data,
+            index=index,
+            target_sequence_list=branch_list,
+            on_save_callback=update_callback,
+            is_sub_editor=True
+        )
+
+    def _remove_action_from_branch(self, branch_list, selection, update_callback):
+        if not selection: return
+        index = selection[0]
+        branch_list.pop(index)
+        update_callback()
+        self.master.log(f"Removed sub-action {index+1}.")
+
+    def on_if_action_select(self, event):
+        self._update_button_state(self.if_listbox.curselection(), self.if_edit_button, self.if_remove_button)
+    def on_else_action_select(self, event):
+        self._update_button_state(self.else_listbox.curselection(), self.else_edit_button, self.else_remove_button)
+
+    def _update_button_state(self, selection, edit_button, remove_button):
+        if selection:
+            edit_button.config(state=tk.NORMAL)
+            remove_button.config(state=tk.NORMAL)
+        else:
+            edit_button.config(state=tk.DISABLED)
+            remove_button.config(state=tk.DISABLED)
+
+    def _update_if_actions_listbox(self):
+        self._update_branch_listbox(self.if_listbox, self.if_branch)
+    def _update_else_actions_listbox(self):
+        self._update_branch_listbox(self.else_listbox, self.else_branch)
+
+    def _update_branch_listbox(self, listbox, branch):
+        listbox.delete(0, tk.END)
+        for i, step in enumerate(branch):
+            action = step.get('action_type', '?')
+            target = step.get('detection_target_name', 'Unknown')
+            text = f"{i+1}: {action} on '{target}'"
+            listbox.insert(tk.END, text)
+        # Manually trigger select event to update buttons
+        self.on_if_action_select(None)
+        self.on_else_action_select(None)
+
+
     def _add_loop_action(self):
         StepEditor(
             master=self.master,
@@ -1634,11 +1849,14 @@ class StepEditor(tk.Toplevel):
         self.simple_action_frame.pack_forget()
         self.conditional_loop_frame.pack_forget()
         self.loop_frame.pack_forget()
+        self.conditional_branch_frame.pack_forget()
 
         if step_type == 'simple':
             self.simple_action_frame.pack(fill="x", expand=True, padx=10)
         elif step_type == 'loop':
             self.loop_frame.pack(fill="x", expand=True, padx=10)
+        elif step_type == 'conditional_branch':
+            self.conditional_branch_frame.pack(fill="x", expand=True, padx=10)
         else: # conditional_loop
             self.conditional_loop_frame.pack(fill="x", expand=True, padx=10)
 
@@ -1811,6 +2029,19 @@ class StepEditor(tk.Toplevel):
                 step['loop_condition_target'] = [os.path.join("templates", name) for name in condition_target_names]
                 step['loop_condition_target_name'] = ", ".join(condition_target_names)
                 step['max_retries'] = max_retries
+
+        elif step_type == 'conditional_branch':
+            step = {
+                "step_type": "conditional_branch",
+                "condition": {
+                    "variable": self.if_variable.get(),
+                    "operator": self.if_operator.get(),
+                    "value": self.if_value.get()
+                },
+                "if_branch": self.if_branch,
+                "else_branch": self.else_branch,
+                "window_title": self.target_window_title.get(), # Retain for consistency, though not used by parent
+            }
 
         else: # conditional_loop
             try:
