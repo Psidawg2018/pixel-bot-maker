@@ -27,14 +27,17 @@ class App(tk.Tk):
         self.geometry("800x600")
 
         # --- Color Theme ---
-        self.dark_theme = {
-            "bg_color": "#2C3E50", "widget_bg_color": "#34495E", "text_color": "#ECF0F1",
-            "button_color": "#3498DB", "button_text_color": "#ECF0F1"
+        self.sleek_blue_theme = {
+            "bg_color": "#0A192F",  # Deep Navy
+            "widget_bg_color": "#1E3A5F", # Darker Blue-Gray
+            "text_color": "#E6F1FF",  # Soft White/Light Blue
+            "accent_color": "#64FFDA", # Electric Blue/Mint Green for accents
+            "button_color": "#007BFF", # A more standard blue for buttons
+            "button_text_color": "#FFFFFF"
         }
-        self.light_theme = {
-            "bg_color": "#ECECEC", "widget_bg_color": "#FFFFFF", "text_color": "#000000",
-            "button_color": "#007BFF", "button_text_color": "#FFFFFF"
-        }
+        # For now, we'll just have one theme. We can add a light theme later if needed.
+        self.dark_theme = self.sleek_blue_theme
+        self.light_theme = self.sleek_blue_theme
         self._configure_theme()
         self.configure(bg=self.bg_color)
 
@@ -126,12 +129,12 @@ class App(tk.Tk):
         self.remove_step_button.pack(pady=2, fill="x")
 
         # --- Final Controls ---
-        controls_frame = tk.LabelFrame(main_tab, text="Global Target", bg=self.bg_color, fg=self.text_color, padx=5, pady=5)
-        controls_frame.pack(pady=10, padx=10, fill="x")
+        controls_frame = ttk.LabelFrame(main_tab, text="Global Target", padding="10")
+        controls_frame.pack(pady=10, fill="x")
 
         self.target_window_label = ttk.Label(controls_frame, textvariable=self.target_window_title, wraplength=380, justify="left", style="Card.TLabel")
-        self.target_window_label.pack(pady=5, fill="x", expand=True)
-        ttk.Button(controls_frame, text="Change Target Window", command=self.prompt_for_window_selection).pack(pady=(0,5))
+        self.target_window_label.pack(pady=5, fill="x", expand=True, ipady=5)
+        ttk.Button(controls_frame, text="Change Target Window", command=self.prompt_for_window_selection).pack(pady=(10,5))
 
         # --- Most Loaded Sequences ---
         most_loaded_frame = ttk.LabelFrame(main_tab, text="Frequently Used", padding="10")
@@ -161,16 +164,7 @@ class App(tk.Tk):
         hide_bot_check.pack(anchor="w", padx=5, pady=2)
 
         # --- Appearance Settings ---
-        theme_frame = ttk.LabelFrame(settings_content_frame, text="Appearance", padding="10")
-        theme_frame.pack(fill="x", pady=5, anchor="n")
-
-        self.theme_var = tk.StringVar(value=self.settings_manager.get_setting('theme'))
-        theme_label = ttk.Label(theme_frame, text="Theme:")
-        theme_label.pack(side="left", padx=5)
-        dark_radio = ttk.Radiobutton(theme_frame, text="Dark", variable=self.theme_var, value="dark", command=self.apply_theme)
-        dark_radio.pack(side="left")
-        light_radio = ttk.Radiobutton(theme_frame, text="Light", variable=self.theme_var, value="light", command=self.apply_theme)
-        light_radio.pack(side="left")
+        # Theme selection is removed as we now have a single, unified theme.
 
         # --- Image Matching Settings ---
         matching_frame = ttk.LabelFrame(settings_content_frame, text="Image Matching", padding="10")
@@ -256,13 +250,13 @@ class App(tk.Tk):
         self.style.configure("Card.TLabel", background=colors['widget_bg_color'], relief=tk.SOLID, borderwidth=1)
 
         # Special "Accent" button style
-        self.style.configure("Accent.TButton", background=colors['button_color'], foreground=colors['button_text_color'])
-        self.style.map("Accent.TButton", background=[('active', '#2980B9' if theme == 'dark' else '#0056b3')])
+        self.style.configure("Accent.TButton", background=colors['accent_color'], foreground=colors['bg_color'])
+        self.style.map("Accent.TButton", background=[('active', colors['text_color'])])
 
         # Notebook styling
         self.style.configure('TNotebook', background=colors['bg_color'], borderwidth=0)
-        self.style.configure('TNotebook.Tab', background=colors['bg_color'], foreground=colors['text_color'], padding=[10, 5])
-        self.style.map('TNotebook.Tab', background=[('selected', colors['widget_bg_color'])], foreground=[('selected', colors['text_color'])])
+        self.style.configure('TNotebook.Tab', background=colors['bg_color'], foreground=colors['text_color'], padding=[10, 5], font=("Segoe UI", 10))
+        self.style.map('TNotebook.Tab', background=[('selected', colors['widget_bg_color'])], foreground=[('selected', colors['accent_color'])])
 
         # Apply background and foreground to the log area specifically
         self.log_area.config(bg=colors['widget_bg_color'], fg=colors['text_color'])
@@ -2195,26 +2189,26 @@ class StepEditor(tk.Toplevel):
             self.fallback_target_frame.pack(fill="x")
 
     def _build_wait_ui(self, parent_frame):
-        wait_frame = tk.LabelFrame(parent_frame, text="Post-Action Wait", bg=self.app.bg_color, fg=self.app.text_color, padx=5, pady=5)
+        wait_frame = ttk.LabelFrame(parent_frame, text="Post-Action Wait", padding="10")
 
         # --- Wait Type ---
-        wait_type_frame = tk.Frame(wait_frame, bg=self.app.bg_color)
-        tk.Radiobutton(wait_type_frame, text="None", variable=self.wait_type, value="None", command=self.on_wait_type_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(side="left")
-        tk.Radiobutton(wait_type_frame, text="Fixed", variable=self.wait_type, value="Fixed", command=self.on_wait_type_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(side="left")
-        tk.Radiobutton(wait_type_frame, text="Random", variable=self.wait_type, value="Random", command=self.on_wait_type_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(side="left")
+        wait_type_frame = ttk.Frame(wait_frame)
+        ttk.Radiobutton(wait_type_frame, text="None", variable=self.wait_type, value="None", command=self.on_wait_type_change).pack(side="left")
+        ttk.Radiobutton(wait_type_frame, text="Fixed", variable=self.wait_type, value="Fixed", command=self.on_wait_type_change).pack(side="left")
+        ttk.Radiobutton(wait_type_frame, text="Random", variable=self.wait_type, value="Random", command=self.on_wait_type_change).pack(side="left")
         wait_type_frame.pack(fill="x", pady=(0,5))
 
         # --- Fixed Wait Frame ---
-        self.fixed_wait_frame = tk.Frame(wait_frame, bg=self.app.bg_color)
-        tk.Label(self.fixed_wait_frame, text="Wait (sec):", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
-        tk.Entry(self.fixed_wait_frame, textvariable=self.fixed_wait, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=7).pack(side="left")
+        self.fixed_wait_frame = ttk.Frame(wait_frame)
+        ttk.Label(self.fixed_wait_frame, text="Wait (sec):").pack(side="left", padx=5)
+        ttk.Entry(self.fixed_wait_frame, textvariable=self.fixed_wait, width=7).pack(side="left")
 
         # --- Random Wait Frame ---
-        self.random_wait_frame = tk.Frame(wait_frame, bg=self.app.bg_color)
-        tk.Label(self.random_wait_frame, text="Min (sec):", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
-        tk.Entry(self.random_wait_frame, textvariable=self.min_wait, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=7).pack(side="left")
-        tk.Label(self.random_wait_frame, text="Max (sec):", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=(10,5))
-        tk.Entry(self.random_wait_frame, textvariable=self.max_wait, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=7).pack(side="left")
+        self.random_wait_frame = ttk.Frame(wait_frame)
+        ttk.Label(self.random_wait_frame, text="Min (sec):").pack(side="left", padx=5)
+        ttk.Entry(self.random_wait_frame, textvariable=self.min_wait, width=7).pack(side="left")
+        ttk.Label(self.random_wait_frame, text="Max (sec):").pack(side="left", padx=(10,5))
+        ttk.Entry(self.random_wait_frame, textvariable=self.max_wait, width=7).pack(side="left")
 
         self.on_wait_type_change() # Set initial visibility
         return wait_frame
