@@ -1446,6 +1446,7 @@ class StepEditor(tk.Toplevel):
         # Vars for Time-based Condition
         self.time_condition_hour = tk.StringVar(value=self.step_data.get('time_condition', {}).get('hour', '12'))
         self.time_condition_minute = tk.StringVar(value=self.step_data.get('time_condition', {}).get('minute', '00'))
+        self.time_based_actions = self.step_data.get('actions', [])
 
         # Vars for Post-Action Wait
         wait_params = self.step_data.get('wait_params', {})
@@ -1890,16 +1891,16 @@ class StepEditor(tk.Toplevel):
 
 
     def _add_time_based_action(self):
-        self._open_sub_editor(self.step_data.get('actions', []), self._update_time_based_actions_listbox)
+        self._open_sub_editor(self.time_based_actions, self._update_time_based_actions_listbox)
 
     def _edit_time_based_action(self):
-        self._open_sub_editor(self.step_data.get('actions', []), self._update_time_based_actions_listbox, self.time_based_actions_listbox.curselection())
+        self._open_sub_editor(self.time_based_actions, self._update_time_based_actions_listbox, self.time_based_actions_listbox.curselection())
 
     def _remove_time_based_action(self):
-        self._remove_action_from_branch(self.step_data.get('actions', []), self.time_based_actions_listbox.curselection(), self._update_time_based_actions_listbox)
+        self._remove_action_from_branch(self.time_based_actions, self.time_based_actions_listbox.curselection(), self._update_time_based_actions_listbox)
 
     def _update_time_based_actions_listbox(self):
-        self._update_branch_listbox(self.time_based_actions_listbox, self.step_data.get('actions', []))
+        self._update_branch_listbox(self.time_based_actions_listbox, self.time_based_actions)
         self.time_based_actions_listbox.bind("<<ListboxSelect>>", self.on_time_based_action_select)
 
     def on_time_based_action_select(self, event):
@@ -2221,7 +2222,7 @@ class StepEditor(tk.Toplevel):
             step = {
                 "step_type": "time_based_condition",
                 "time_condition": {"hour": hour, "minute": minute},
-                "actions": self.step_data.get('actions', []),
+                "actions": self.time_based_actions,
                 "window_title": self.target_window_title.get(),
             }
         else: # conditional_loop
