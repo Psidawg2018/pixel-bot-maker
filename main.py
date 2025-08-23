@@ -3,6 +3,7 @@ from tkinter import scrolledtext, colorchooser, filedialog, ttk
 import time
 import json
 import random
+import re
 
 # Import our custom modules
 import numpy as np
@@ -15,7 +16,7 @@ import cv2
 from PIL import Image, ImageTk
 from screen_capture import capture_screen
 from image_analyzer import find_color, find_image
-from automation import click_at, right_click_at, type_text, click_and_drag, scroll_wheel
+from automation import click_at, right_click_at, type_text, click_and_drag, scroll_wheel, press_key_combination
 from settings_manager import SettingsManager
 
 class App(tk.Tk):
@@ -42,7 +43,8 @@ class App(tk.Tk):
         self.scan_job = None
         self.hotkey_listener = None
         self.action_sequence = []
-        self.current_step_index = 0
+        self.variables = {} # For the new variable system
+        self.execution_stack = [] # (sequence, index)
         self.current_retry_count = 0
         self.hide_window_var = tk.BooleanVar(value=self.settings_manager.get_setting('hide_bot_default'))
         self.target_window_title = tk.StringVar()
@@ -480,7 +482,8 @@ class App(tk.Tk):
             if not self.action_sequence:
                 self.log("Cannot start: Action sequence is empty.")
                 return
-            self.current_step_index = 0
+            self.variables.clear()
+            self.execution_stack = [(self.action_sequence, 0)]
             self.current_retry_count = 0
             self.running = True
             self.start_button.config(text="Stop Bot")
@@ -511,41 +514,167 @@ class App(tk.Tk):
             # If no wait, or wait is 0, proceed to the next step immediately.
             self.run_scan_loop()
 
+    def _substitute_variables(self, text):
+        """
+        Substitutes placeholders like {{var_name}} in a string with their
+        values from the self.variables dictionary.
+        """
+        if not isinstance(text, str):
+            return text
+
+        # This regex finds all occurrences of {{...}}
+        return re.sub(r'\{\{(.*?)\}\}', self._replace_match, text)
+
+    def _replace_match(self, match):
+        """
+        Helper function for re.sub to look up the variable.
+        """
+        var_name = match.group(1).strip()
+        # Return the value if found, otherwise return the original placeholder
+        return self.variables.get(var_name, match.group(0))
+
+    def _evaluate_condition(self, condition):
+        var_name = condition.get('variable', '').strip()
+        operator = condition.get('operator')
+        value_to_compare = self._substitute_variables(condition.get('value', ''))
+
+        if not var_name or not operator:
+            self.log(f"Invalid condition: {condition}")
+            return False
+
+        actual_value = self._substitute_variables(var_name)
+
+        # For numeric comparisons, try to convert both to floats
+        try:
+            num_actual_value = float(actual_value)
+            num_value_to_compare = float(value_to_compare)
+            is_numeric = True
+        except (ValueError, TypeError):
+            is_numeric = False
+
+        if operator == "equals":
+            return actual_value == value_to_compare
+        elif operator == "not equals":
+            return actual_value != value_to_compare
+        elif operator == "contains":
+            return value_to_compare in actual_value
+        elif operator == "not contains":
+            return value_to_compare not in actual_value
+        elif is_numeric:
+            if operator == "is greater than":
+                return num_actual_value > num_value_to_compare
+            elif operator == "is less than":
+                return num_actual_value < num_value_to_compare
+
+        self.log(f"Unsupported operator '{operator}' for non-numeric comparison.")
+        return False
+
+
     def run_scan_loop(self):
         if not self.running:
             return
 
-        if self.current_step_index >= len(self.action_sequence):
+        if not self.execution_stack:
             self.log("Action sequence complete. Stopping bot.")
             self.toggle_bot()
             return
 
-        current_step = self.action_sequence[self.current_step_index]
+        current_sequence, current_index = self.execution_stack[-1]
+
+        if current_index >= len(current_sequence):
+            self.execution_stack.pop()
+            self.scan_job = self.after(10, self.run_scan_loop) # Continue processing parent sequence
+            return
+
+        current_step = current_sequence[current_index]
         step_type = current_step.get('step_type', 'simple')
+        action_type = current_step.get('action_type')
+        step_number_str = f"Step {current_index + 1}" # For logging
+
+        # Handle non-UI actions first
+        if action_type == 'Set Variable':
+            var_name = current_step.get('action_params', {}).get('variable_name')
+            var_value = self._substitute_variables(current_step.get('action_params', {}).get('variable_value')) # Allow variables in values
+            if var_name:
+                self.log(f"Setting variable '{var_name}' to '{var_value}'")
+                self.variables[var_name] = var_value
+                self.execution_stack[-1] = (current_sequence, current_index + 1)
+                self._handle_post_action_wait(current_step) # Still respect wait times
+            else:
+                self.log(f"Error in {step_number_str}: 'Set Variable' action has no variable name. Stopping bot.")
+                self.toggle_bot()
+            return
+        elif action_type == 'OCR':
+            params = current_step.get('action_params', {})
+            region = params.get('ocr_region')
+            output_var = params.get('output_variable_name')
+
+            if not region or not output_var:
+                self.log(f"Error in {step_number_str}: OCR step is not configured correctly. Stopping bot.")
+                self.toggle_bot()
+                return
+
+            self.log(f"Performing OCR on region {region} and saving to '{output_var}'...")
+            screenshot = capture_screen(region)
+            from image_analyzer import extract_text_from_image
+            extracted_text = extract_text_from_image(screenshot)
+
+            if extracted_text == "TESSERACT_NOT_FOUND":
+                self.log("FATAL: Tesseract OCR engine not found. Please install it to use the OCR feature. Stopping bot.")
+                self.toggle_bot()
+                return
+
+            self.log(f"OCR Result: '{extracted_text}'. Stored in variable '{output_var}'.")
+            self.variables[output_var] = extracted_text
+            self.execution_stack[-1] = (current_sequence, current_index + 1)
+            self._handle_post_action_wait(current_step)
+            return
+
+        # For other actions, we pass the step and its context
+        step_context = {'sequence': current_sequence, 'index': current_index, 'number_str': step_number_str}
 
         if step_type == 'simple':
-            self._execute_simple_step(current_step)
+            self._execute_simple_step(current_step, step_context)
+        elif step_type == 'conditional_branch':
+            self.log(f"Evaluating condition for {step_number_str}...")
+            # First, advance the parent sequence *before* pushing a new one.
+            self.execution_stack[-1] = (current_sequence, current_index + 1)
+
+            if self._evaluate_condition(current_step.get('condition')):
+                self.log("Condition is TRUE. Executing IF branch.")
+                if_branch = current_step.get('if_branch', [])
+                if if_branch:
+                    self.execution_stack.append((if_branch, 0))
+            else:
+                self.log("Condition is FALSE. Executing ELSE branch.")
+                else_branch = current_step.get('else_branch', [])
+                if else_branch:
+                    self.execution_stack.append((else_branch, 0))
+
+            # Continue to the next loop iteration immediately to process the new stack
+            self.scan_job = self.after(10, self.run_scan_loop)
+            return
         elif step_type == 'loop':
-            self._execute_loop_step(current_step)
+            self._execute_loop_step(current_step, step_context)
         elif step_type == 'conditional_loop':
-            self._execute_conditional_loop_step(current_step)
+            self._execute_conditional_loop_step(current_step, step_context)
         else:
-            self.log(f"Error: Unknown step type '{step_type}' at step {self.current_step_index + 1}. Stopping bot.")
+            self.log(f"Error: Unknown step type '{step_type}' at {step_number_str}. Stopping bot.")
             self.toggle_bot()
 
-    def _execute_loop_step(self, step):
+    def _execute_loop_step(self, step, context):
         loop_mode = step.get('loop_mode', 'repeat')
 
         target_window_title = step.get("window_title")
         if not target_window_title:
-            self.log(f"Error in Loop Step {self.current_step_index+1}: No target window specified. Stopping bot.")
+            self.log(f"Error in {context['number_str']} (Loop): No target window specified. Stopping bot.")
             self.toggle_bot()
             return
 
         try:
             target_windows = gw.getWindowsWithTitle(target_window_title)
             if not target_windows:
-                self.log(f"Step {self.current_step_index+1}: Window '{target_window_title}' not found. Re-scanning...")
+                self.log(f"{context['number_str']} (Loop): Window '{target_window_title}' not found. Re-scanning...")
                 self.scan_job = self.after(2000, self.run_scan_loop)
                 return
             target_window = target_windows[0]
@@ -585,14 +714,15 @@ class App(tk.Tk):
                         return
 
             self.log("Loop finished.")
-            self.current_step_index += 1
+            sequence, index = self.execution_stack[-1]
+            self.execution_stack[-1] = (sequence, index + 1)
             self._handle_post_action_wait(step)
 
         elif loop_mode == 'until':
             max_retries = step.get('max_retries', 10)
             condition_target = step.get('loop_condition_target')
             condition_found = False
-            self.log(f"Executing Loop Step {self.current_step_index + 1}: Looping until '{step.get('loop_condition_target_name')}' is found.")
+            self.log(f"Executing {context['number_str']} (Loop): Looping until '{step.get('loop_condition_target_name')}' is found.")
 
             for i in range(max_retries):
                 if not self.running: return
@@ -629,7 +759,8 @@ class App(tk.Tk):
 
             if condition_found:
                 self.log("Loop finished successfully.")
-                self.current_step_index += 1
+                sequence, index = self.execution_stack[-1]
+                self.execution_stack[-1] = (sequence, index + 1)
                 self._handle_post_action_wait(step)
             else:
                 self.log(f"Loop failed: Condition not met after {max_retries} retries. Stopping bot.")
@@ -693,9 +824,15 @@ class App(tk.Tk):
                 self.log(f"    - Performing action: Click with offset at ({click_x}, {click_y})")
                 click_at(click_x, click_y)
             elif action_type == "Type":
-                text = action_params.get('text', '')
-                self.log(f"    - Performing action: Type '{text}'")
-                type_text(text)
+                text_to_type = action_params.get('text', '')
+                substituted_text = self._substitute_variables(text_to_type)
+                self.log(f"    - Performing action: Type '{substituted_text}'")
+                type_text(substituted_text)
+            elif action_type == "Key Combo":
+                key_combo = action_params.get('key_combo', '')
+                substituted_combo = self._substitute_variables(key_combo)
+                self.log(f"    - Performing action: Press keys '{substituted_combo}'")
+                press_key_combination(substituted_combo)
             elif action_type == "Scroll":
                 direction = action_params.get('scroll_direction', 'Down')
                 amount = action_params.get('scroll_amount', 5)
@@ -709,17 +846,17 @@ class App(tk.Tk):
             self.log("    - Target not found.")
             return False
 
-    def _execute_simple_step(self, step):
+    def _execute_simple_step(self, step, context):
         target_window_title = step.get("window_title")
         if not target_window_title:
-            self.log(f"Error in Step {self.current_step_index+1}: No target window specified. Stopping bot.")
+            self.log(f"Error in {context['number_str']}: No target window specified. Stopping bot.")
             self.toggle_bot()
             return
 
         try:
             target_windows = gw.getWindowsWithTitle(target_window_title)
             if not target_windows:
-                self.log(f"Step {self.current_step_index+1}: Window '{target_window_title}' not found. Re-scanning...")
+                self.log(f"{context['number_str']}: Window '{target_window_title}' not found. Re-scanning...")
                 self.scan_job = self.after(2000, self.run_scan_loop)
                 return
             target_window = target_windows[0]
@@ -744,7 +881,9 @@ class App(tk.Tk):
             return
 
         if self._execute_single_action(step, scan_region):
-            self.current_step_index += 1
+            # On success, advance the index on the current stack frame
+            sequence, index = self.execution_stack[-1]
+            self.execution_stack[-1] = (sequence, index + 1)
             self.current_retry_count = 0 # Reset for next step
             self.log("Action complete.")
             # The wait is handled inside _execute_single_action now
@@ -752,24 +891,24 @@ class App(tk.Tk):
             self.log("Target not found. Re-scanning same step in 2 seconds...")
             self.scan_job = self.after(2000, self.run_scan_loop)
 
-    def _execute_conditional_loop_step(self, step):
+    def _execute_conditional_loop_step(self, step, context):
         max_retries = step.get('max_retries', 5)
         if self.current_retry_count >= max_retries:
-            self.log(f"Loop failed after {max_retries} retries for step {self.current_step_index + 1}. Stopping bot.")
+            self.log(f"Loop failed after {max_retries} retries for {context['number_str']}. Stopping bot.")
             self.toggle_bot()
             return
 
         # The window title for a conditional step is stored in the step itself
         target_window_title = step.get("window_title")
         if not target_window_title:
-            self.log(f"Error in Step {self.current_step_index+1}: No target window specified for conditional loop. Stopping bot.")
+            self.log(f"Error in {context['number_str']} (Conditional): No target window specified. Stopping bot.")
             self.toggle_bot()
             return
 
         try:
             target_windows = gw.getWindowsWithTitle(target_window_title)
             if not target_windows:
-                self.log(f"Step {self.current_step_index+1}: Window '{target_window_title}' not found. Retrying in 2s...")
+                self.log(f"{context['number_str']} (Conditional): Window '{target_window_title}' not found. Retrying in 2s...")
                 self.scan_job = self.after(2000, self.run_scan_loop)
                 return
             target_window = target_windows[0]
@@ -795,7 +934,7 @@ class App(tk.Tk):
 
         # 1. Look for the primary target
         primary_target = step.get('primary_target', {})
-        self.log(f"Loop Step {self.current_step_index+1} (Attempt {self.current_retry_count+1}/{max_retries}): Finding '{primary_target.get('detection_target_name')}'...")
+        self.log(f"{context['number_str']} (Attempt {self.current_retry_count+1}/{max_retries}): Finding '{primary_target.get('detection_target_name')}'...")
         haystack_img = capture_screen(scan_region)
 
         primary_pos = None
@@ -814,7 +953,8 @@ class App(tk.Tk):
             # 2. If found, success! Move to next step.
             self.log("Primary target found! Proceeding to next step.")
             self.current_retry_count = 0
-            self.current_step_index += 1
+            sequence, index = self.execution_stack[-1]
+            self.execution_stack[-1] = (sequence, index + 1)
             self._handle_post_action_wait(step)
         else:
             # 3. If not found, perform fallback action.
@@ -1150,7 +1290,14 @@ class StepEditor(tk.Toplevel):
 
         self.title("Action Editor" if is_sub_editor else "Step Editor")
         self.geometry("563x700") # Increased height for new options
-        self.configure(bg=self.master.bg_color)
+
+        # Find the root App instance to access theme colors correctly in sub-editors
+        app = self.master
+        while not isinstance(app, App):
+            app = app.master
+        self.app = app # Store it for later use if needed
+
+        self.configure(bg=app.bg_color)
         self.transient(self.master)
         self.grab_set()
 
@@ -1163,6 +1310,12 @@ class StepEditor(tk.Toplevel):
         self.simple_click_offset_x = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_x', '0'))
         self.simple_click_offset_y = tk.StringVar(value=self.step_data.get('action_params', {}).get('click_offset_y', '0'))
         self.text_to_type = tk.StringVar(value=self.step_data.get('action_params', {}).get('text', ''))
+        self.key_combo_text = tk.StringVar(value=self.step_data.get('action_params', {}).get('key_combo', 'ctrl+c'))
+        self.variable_name = tk.StringVar(value=self.step_data.get('action_params', {}).get('variable_name', ''))
+        self.variable_value = tk.StringVar(value=self.step_data.get('action_params', {}).get('variable_value', ''))
+        self.output_variable_name = tk.StringVar(value=self.step_data.get('action_params', {}).get('output_variable_name', 'ocr_result'))
+        self.ocr_region = self.step_data.get('action_params', {}).get('ocr_region')
+        self.ocr_region_label_var = tk.StringVar(value=self._get_ocr_region_display_text())
         self.scroll_direction = tk.StringVar(value=self.step_data.get('action_params', {}).get('scroll_direction', 'Down'))
         self.scroll_amount = tk.StringVar(value=self.step_data.get('action_params', {}).get('scroll_amount', '5'))
         self.target_window_title = tk.StringVar(value=self.step_data.get('window_title', self.master.target_window_title.get() or ''))
@@ -1189,6 +1342,14 @@ class StepEditor(tk.Toplevel):
         self.fallback_action_type = tk.StringVar(value=self.step_data.get('on_fail', {}).get('action_type', 'Click'))
         self.fallback_drag_offset_x = tk.StringVar(value=self.step_data.get('on_fail', {}).get('action_params', {}).get('drag_offset_x', '0'))
         self.fallback_drag_offset_y = tk.StringVar(value=self.step_data.get('on_fail', {}).get('action_params', {}).get('drag_offset_y', '0'))
+
+        # Vars for Conditional Branch (If/Else)
+        condition = self.step_data.get('condition', {})
+        self.if_variable = tk.StringVar(value=condition.get('variable', ''))
+        self.if_operator = tk.StringVar(value=condition.get('operator', 'equals'))
+        self.if_value = tk.StringVar(value=condition.get('value', ''))
+        self.if_branch = self.step_data.get('if_branch', [])
+        self.else_branch = self.step_data.get('else_branch', [])
 
         # Vars for Loop Step
         self.loop_mode = tk.StringVar(value=self.step_data.get('loop_mode', 'repeat'))
@@ -1217,7 +1378,7 @@ class StepEditor(tk.Toplevel):
         step_type_frame = tk.LabelFrame(content_frame, text="Step Type", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
         step_type_frame.pack(pady=10, padx=10, fill="x")
         self.step_type_radios = {}
-        step_types = [("Simple Action", "simple"), ("Loop", "loop"), ("Conditional (Legacy)", "conditional_loop")]
+        step_types = [("Simple Action", "simple"), ("If/Else", "conditional_branch"), ("Loop", "loop"), ("Conditional (Legacy)", "conditional_loop")]
         for text, value in step_types:
             radio = tk.Radiobutton(step_type_frame, text=text, variable=self.step_type, value=value, command=self.on_step_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color)
             radio.pack(side="left", padx=5)
@@ -1228,6 +1389,7 @@ class StepEditor(tk.Toplevel):
         self.simple_action_frame = tk.Frame(content_frame, bg=self.master.bg_color)
         self.conditional_loop_frame = tk.Frame(content_frame, bg=self.master.bg_color)
         self.loop_frame = tk.Frame(content_frame, bg=self.master.bg_color)
+        self.conditional_branch_frame = tk.Frame(content_frame, bg=self.master.bg_color)
 
 
         # --- UI for Simple Action Frame ---
@@ -1239,6 +1401,9 @@ class StepEditor(tk.Toplevel):
         # --- UI for Loop Frame ---
         self.build_loop_ui(self.loop_frame)
 
+        # --- UI for Conditional Branch Frame ---
+        self.build_conditional_branch_ui(self.conditional_branch_frame)
+
         # --- Save/Cancel Buttons (parented to button_frame) ---
         tk.Button(button_frame, text="Cancel", command=self.destroy, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=10).pack(side="right", padx=10)
         tk.Button(button_frame, text="Save Step", command=self.on_save, bg=self.master.button_color, fg=self.master.button_text_color, relief=tk.FLAT, width=10).pack(side="right")
@@ -1247,79 +1412,106 @@ class StepEditor(tk.Toplevel):
 
     def build_simple_action_ui(self, parent_frame):
         # This function builds the UI for a simple action, parented to the given frame.
-        window_frame = tk.LabelFrame(parent_frame, text="1. Select Target Window", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        window_frame = tk.LabelFrame(parent_frame, text="1. Select Target Window", bg=self.app.bg_color, fg=self.app.text_color, padx=5, pady=5)
         window_frame.pack(pady=10, padx=10, fill="x")
-        self.window_label = tk.Label(window_frame, textvariable=self.target_window_title, bg=self.master.widget_bg_color, fg=self.master.text_color, wraplength=250)
+        self.window_label = tk.Label(window_frame, textvariable=self.target_window_title, bg=self.app.widget_bg_color, fg=self.app.text_color, wraplength=250)
         self.window_label.pack(side="left", fill="x", expand=True, padx=5)
-        tk.Button(window_frame, text="Select...", command=self.select_window, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left")
+        tk.Button(window_frame, text="Select...", command=self.select_window, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT).pack(side="left")
         if not self.target_window_title.get(): self.target_window_title.set("(None Selected)")
 
-        region_frame = tk.LabelFrame(parent_frame, text="2. Set Search Region (Optional)", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        region_frame = tk.LabelFrame(parent_frame, text="2. Set Search Region (Optional)", bg=self.app.bg_color, fg=self.app.text_color, padx=5, pady=5)
         region_frame.pack(pady=10, padx=10, fill="x")
-        self.region_label = tk.Label(region_frame, textvariable=self.search_region_label_var, bg=self.master.widget_bg_color, fg=self.master.text_color, wraplength=350)
+        self.region_label = tk.Label(region_frame, textvariable=self.search_region_label_var, bg=self.app.widget_bg_color, fg=self.app.text_color, wraplength=350)
         self.region_label.pack(side="left", fill="x", expand=True, padx=5)
-        tk.Button(region_frame, text="Set Region", command=self.set_search_region, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left", padx=(0, 5))
-        tk.Button(region_frame, text="Clear", command=self.clear_search_region, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(side="left")
+        tk.Button(region_frame, text="Set Region", command=self.set_search_region, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT).pack(side="left", padx=(0, 5))
+        tk.Button(region_frame, text="Clear", command=self.clear_search_region, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT).pack(side="left")
 
 
-        mode_frame = tk.LabelFrame(parent_frame, text="3. Choose What to Look For", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        mode_frame = tk.LabelFrame(parent_frame, text="3. Choose What to Look For", bg=self.app.bg_color, fg=self.app.text_color, padx=5, pady=5)
         mode_frame.pack(pady=10, padx=10, fill="x")
-        tk.Radiobutton(mode_frame, text="Color", variable=self.detection_mode, value="Color", command=self.on_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
-        tk.Radiobutton(mode_frame, text="Image", variable=self.detection_mode, value="Image", command=self.on_mode_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(mode_frame, text="Color", variable=self.detection_mode, value="Color", command=self.on_mode_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(mode_frame, text="Image", variable=self.detection_mode, value="Image", command=self.on_mode_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
 
-        self.color_frame = tk.Frame(parent_frame, bg=self.master.bg_color)
-        self.image_frame = tk.Frame(parent_frame, bg=self.master.bg_color)
+        self.color_frame = tk.Frame(parent_frame, bg=self.app.bg_color)
+        self.image_frame = tk.Frame(parent_frame, bg=self.app.bg_color)
 
-        tk.Button(self.color_frame, text="Sample Color", command=self.sample_color, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack()
-        self.color_preview = tk.Frame(self.color_frame, bg=self.master._bgr_to_hex(self.target_color_bgr), width=25, height=25, relief=tk.SUNKEN, borderwidth=1)
+        tk.Button(self.color_frame, text="Sample Color", command=self.sample_color, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT).pack()
+        self.color_preview = tk.Frame(self.color_frame, bg=self.app._bgr_to_hex(self.target_color_bgr), width=25, height=25, relief=tk.SUNKEN, borderwidth=1)
         self.color_preview.pack(pady=5)
 
-        tk.Button(self.image_frame, text="Take Screenshot", command=self.take_screenshot, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(pady=(0,5))
+        tk.Button(self.image_frame, text="Take Screenshot", command=self.take_screenshot, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT).pack(pady=(0,5))
 
         # --- Image List ---
-        image_list_frame = tk.Frame(self.image_frame, bg=self.master.bg_color)
+        image_list_frame = tk.Frame(self.image_frame, bg=self.app.bg_color)
         image_list_frame.pack(fill="x", expand=True, pady=5)
 
-        self.image_listbox = tk.Listbox(image_list_frame, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, height=4, selectmode=tk.EXTENDED)
+        self.image_listbox = tk.Listbox(image_list_frame, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, height=4, selectmode=tk.EXTENDED)
         self.image_listbox.pack(side="left", fill="x", expand=True)
 
-        image_button_frame = tk.Frame(image_list_frame, bg=self.master.bg_color)
+        image_button_frame = tk.Frame(image_list_frame, bg=self.app.bg_color)
         image_button_frame.pack(side="left", padx=(5,0))
-        tk.Button(image_button_frame, text="Add", command=lambda: self._add_image_template_to_listbox(self.image_listbox), bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(fill="x", pady=2)
-        tk.Button(image_button_frame, text="Remove", command=lambda: self._remove_image_template_from_listbox(self.image_listbox), bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(fill="x", pady=2)
+        tk.Button(image_button_frame, text="Add", command=lambda: self._add_image_template_to_listbox(self.image_listbox), bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT).pack(fill="x", pady=2)
+        tk.Button(image_button_frame, text="Remove", command=lambda: self._remove_image_template_from_listbox(self.image_listbox), bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT).pack(fill="x", pady=2)
 
         self._update_image_listbox()
 
-        action_frame = tk.LabelFrame(parent_frame, text="3. Choose Action", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        action_frame = tk.LabelFrame(parent_frame, text="3. Choose Action", bg=self.app.bg_color, fg=self.app.text_color, padx=5, pady=5)
         action_frame.pack(pady=10, padx=10, fill="x")
-        tk.Radiobutton(action_frame, text="Click", variable=self.action_type, value="Click", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
-        tk.Radiobutton(action_frame, text="Right-click", variable=self.action_type, value="Right-click", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
-        tk.Radiobutton(action_frame, text="Click with Offset", variable=self.action_type, value="Click with Offset", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
-        tk.Radiobutton(action_frame, text="Type", variable=self.action_type, value="Type", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
-        tk.Radiobutton(action_frame, text="Scroll", variable=self.action_type, value="Scroll", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Click", variable=self.action_type, value="Click", command=self.on_action_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Right-click", variable=self.action_type, value="Right-click", command=self.on_action_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Click with Offset", variable=self.action_type, value="Click with Offset", command=self.on_action_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Type", variable=self.action_type, value="Type", command=self.on_action_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Key Combo", variable=self.action_type, value="Key Combo", command=self.on_action_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Scroll", variable=self.action_type, value="Scroll", command=self.on_action_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="Set Variable", variable=self.action_type, value="Set Variable", command=self.on_action_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
+        tk.Radiobutton(action_frame, text="OCR", variable=self.action_type, value="OCR", command=self.on_action_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(anchor="w")
 
-        self.type_entry_frame = tk.Frame(action_frame, bg=self.master.bg_color)
-        self.type_entry = tk.Entry(self.type_entry_frame, textvariable=self.text_to_type, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT)
+        self.type_entry_frame = tk.Frame(action_frame, bg=self.app.bg_color)
+        self.type_entry = tk.Entry(self.type_entry_frame, textvariable=self.text_to_type, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT)
         self.type_entry.pack(fill="x", padx=5, pady=5)
 
-        self.simple_offset_frame = tk.Frame(action_frame, bg=self.master.bg_color)
-        simple_offset_x_frame = tk.Frame(self.simple_offset_frame, bg=self.master.bg_color)
-        tk.Label(simple_offset_x_frame, text="X Offset:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
-        tk.Entry(simple_offset_x_frame, textvariable=self.simple_click_offset_x, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+        self.key_combo_frame = tk.Frame(action_frame, bg=self.app.bg_color)
+        tk.Label(self.key_combo_frame, text="Keys (e.g., ctrl+alt+delete):", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
+        self.key_combo_entry = tk.Entry(self.key_combo_frame, textvariable=self.key_combo_text, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=20)
+        self.key_combo_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
+
+        self.set_variable_frame = tk.Frame(action_frame, bg=self.app.bg_color)
+        tk.Label(self.set_variable_frame, text="Name:", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
+        tk.Entry(self.set_variable_frame, textvariable=self.variable_name, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=15).pack(side="left", padx=5)
+        tk.Label(self.set_variable_frame, text="Value:", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
+        tk.Entry(self.set_variable_frame, textvariable=self.variable_value, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=20).pack(side="left", padx=5)
+
+        self.ocr_frame = tk.Frame(action_frame, bg=self.app.bg_color)
+        ocr_var_frame = tk.Frame(self.ocr_frame, bg=self.app.bg_color)
+        tk.Label(ocr_var_frame, text="Save Text to Variable:", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
+        tk.Entry(ocr_var_frame, textvariable=self.output_variable_name, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=20).pack(side="left", padx=5)
+        ocr_var_frame.pack(fill="x", pady=2)
+
+        ocr_region_frame = tk.Frame(self.ocr_frame, bg=self.app.bg_color)
+        self.ocr_region_label = tk.Label(ocr_region_frame, textvariable=self.ocr_region_label_var, bg=self.app.widget_bg_color, fg=self.app.text_color, wraplength=350)
+        self.ocr_region_label.pack(side="left", fill="x", expand=True, padx=5)
+        tk.Button(ocr_region_frame, text="Set Region", command=self.set_ocr_region, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT).pack(side="left", padx=(0, 5))
+        ocr_region_frame.pack(fill="x", pady=2)
+
+
+        self.simple_offset_frame = tk.Frame(action_frame, bg=self.app.bg_color)
+        simple_offset_x_frame = tk.Frame(self.simple_offset_frame, bg=self.app.bg_color)
+        tk.Label(simple_offset_x_frame, text="X Offset:", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
+        tk.Entry(simple_offset_x_frame, textvariable=self.simple_click_offset_x, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=7).pack(side="left")
         simple_offset_x_frame.pack(fill="x", pady=2)
-        simple_offset_y_frame = tk.Frame(self.simple_offset_frame, bg=self.master.bg_color)
-        tk.Label(simple_offset_y_frame, text="Y Offset:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
-        tk.Entry(simple_offset_y_frame, textvariable=self.simple_click_offset_y, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+        simple_offset_y_frame = tk.Frame(self.simple_offset_frame, bg=self.app.bg_color)
+        tk.Label(simple_offset_y_frame, text="Y Offset:", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
+        tk.Entry(simple_offset_y_frame, textvariable=self.simple_click_offset_y, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=7).pack(side="left")
         simple_offset_y_frame.pack(fill="x", pady=2)
 
-        self.scroll_frame = tk.Frame(action_frame, bg=self.master.bg_color)
-        scroll_direction_frame = tk.Frame(self.scroll_frame, bg=self.master.bg_color)
-        tk.Label(scroll_direction_frame, text="Direction:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        self.scroll_frame = tk.Frame(action_frame, bg=self.app.bg_color)
+        scroll_direction_frame = tk.Frame(self.scroll_frame, bg=self.app.bg_color)
+        tk.Label(scroll_direction_frame, text="Direction:", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
         tk.OptionMenu(scroll_direction_frame, self.scroll_direction, "Down", "Up").pack(side="left")
         scroll_direction_frame.pack(fill="x", pady=2)
-        scroll_amount_frame = tk.Frame(self.scroll_frame, bg=self.master.bg_color)
-        tk.Label(scroll_amount_frame, text="Amount:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
-        tk.Entry(scroll_amount_frame, textvariable=self.scroll_amount, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=7).pack(side="left")
+        scroll_amount_frame = tk.Frame(self.scroll_frame, bg=self.app.bg_color)
+        tk.Label(scroll_amount_frame, text="Amount:", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
+        tk.Entry(scroll_amount_frame, textvariable=self.scroll_amount, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=7).pack(side="left")
         scroll_amount_frame.pack(fill="x", pady=2)
 
         self.on_mode_change()
@@ -1463,6 +1655,138 @@ class StepEditor(tk.Toplevel):
         self._update_loop_actions_listbox()
         self._update_until_image_listbox()
 
+    def build_conditional_branch_ui(self, parent_frame):
+        # --- Condition Builder ---
+        condition_frame = tk.LabelFrame(parent_frame, text="Condition", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        condition_frame.pack(pady=5, padx=10, fill="x")
+
+        tk.Label(condition_frame, text="If variable", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(condition_frame, textvariable=self.if_variable, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=15).pack(side="left", padx=5)
+
+        operators = ["equals", "not equals", "contains", "not contains", "is greater than", "is less than"]
+        tk.OptionMenu(condition_frame, self.if_operator, *operators).pack(side="left", padx=5)
+
+        tk.Label(condition_frame, text="value", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
+        tk.Entry(condition_frame, textvariable=self.if_value, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=15).pack(side="left", padx=5)
+
+        # --- Branch Frames ---
+        branch_parent_frame = tk.Frame(parent_frame, bg=self.master.bg_color)
+        branch_parent_frame.pack(pady=5, padx=10, fill="both", expand=True)
+
+        # --- IF Branch ---
+        if_frame = self._create_branch_frame(branch_parent_frame, "IF Actions (if condition is true)")
+        self.if_listbox = self._create_branch_listbox(if_frame, self.on_if_action_select)
+        self.if_edit_button, self.if_remove_button = self._create_branch_buttons(
+            if_frame,
+            self._add_if_action,
+            self._edit_if_action,
+            self._remove_if_action
+        )
+        if_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
+
+        # --- ELSE Branch ---
+        else_frame = self._create_branch_frame(branch_parent_frame, "ELSE Actions (optional)")
+        self.else_listbox = self._create_branch_listbox(else_frame, self.on_else_action_select)
+        self.else_edit_button, self.else_remove_button = self._create_branch_buttons(
+            else_frame,
+            self._add_else_action,
+            self._edit_else_action,
+            self._remove_else_action
+        )
+        else_frame.pack(side="right", fill="both", expand=True, padx=(5, 0))
+
+        self._update_if_actions_listbox()
+        self._update_else_actions_listbox()
+
+
+    def _create_branch_frame(self, parent, title):
+        frame = tk.LabelFrame(parent, text=title, bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        return frame
+
+    def _create_branch_listbox(self, parent, select_callback):
+        list_container = tk.Frame(parent, bg=self.master.bg_color)
+        list_container.pack(fill="both", expand=True)
+        listbox = tk.Listbox(list_container, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, height=8)
+        listbox.pack(side="left", fill="both", expand=True)
+        listbox.bind("<<ListboxSelect>>", select_callback)
+        return listbox
+
+    def _create_branch_buttons(self, parent, add_cmd, edit_cmd, remove_cmd):
+        button_frame = tk.Frame(parent.winfo_children()[0], bg=self.master.bg_color) # Get the list_container
+        button_frame.pack(side="left", padx=(5,0), fill="y")
+        tk.Button(button_frame, text="Add", command=add_cmd, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT).pack(pady=2, fill="x")
+        edit_button = tk.Button(button_frame, text="Edit", command=edit_cmd, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, state=tk.DISABLED)
+        edit_button.pack(pady=2, fill="x")
+        remove_button = tk.Button(button_frame, text="Remove", command=remove_cmd, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, state=tk.DISABLED)
+        remove_button.pack(pady=2, fill="x")
+        return edit_button, remove_button
+
+    def _add_if_action(self):
+        self._open_sub_editor(self.if_branch, self._update_if_actions_listbox)
+    def _edit_if_action(self):
+        self._open_sub_editor(self.if_branch, self._update_if_actions_listbox, self.if_listbox.curselection())
+    def _remove_if_action(self):
+        self._remove_action_from_branch(self.if_branch, self.if_listbox.curselection(), self._update_if_actions_listbox)
+
+    def _add_else_action(self):
+        self._open_sub_editor(self.else_branch, self._update_else_actions_listbox)
+    def _edit_else_action(self):
+        self._open_sub_editor(self.else_branch, self._update_else_actions_listbox, self.else_listbox.curselection())
+    def _remove_else_action(self):
+        self._remove_action_from_branch(self.else_branch, self.else_listbox.curselection(), self._update_else_actions_listbox)
+
+    def _open_sub_editor(self, branch_list, update_callback, selection=None):
+        index = None
+        step_data = {}
+        if selection:
+            index = selection[0]
+            step_data = branch_list[index]
+        StepEditor(
+            master=self,
+            step_data=step_data,
+            index=index,
+            target_sequence_list=branch_list,
+            on_save_callback=update_callback,
+            is_sub_editor=True
+        )
+
+    def _remove_action_from_branch(self, branch_list, selection, update_callback):
+        if not selection: return
+        index = selection[0]
+        branch_list.pop(index)
+        update_callback()
+        self.master.log(f"Removed sub-action {index+1}.")
+
+    def on_if_action_select(self, event):
+        self._update_button_state(self.if_listbox.curselection(), self.if_edit_button, self.if_remove_button)
+    def on_else_action_select(self, event):
+        self._update_button_state(self.else_listbox.curselection(), self.else_edit_button, self.else_remove_button)
+
+    def _update_button_state(self, selection, edit_button, remove_button):
+        if selection:
+            edit_button.config(state=tk.NORMAL)
+            remove_button.config(state=tk.NORMAL)
+        else:
+            edit_button.config(state=tk.DISABLED)
+            remove_button.config(state=tk.DISABLED)
+
+    def _update_if_actions_listbox(self):
+        self._update_branch_listbox(self.if_listbox, self.if_branch)
+    def _update_else_actions_listbox(self):
+        self._update_branch_listbox(self.else_listbox, self.else_branch)
+
+    def _update_branch_listbox(self, listbox, branch):
+        listbox.delete(0, tk.END)
+        for i, step in enumerate(branch):
+            action = step.get('action_type', '?')
+            target = step.get('detection_target_name', 'Unknown')
+            text = f"{i+1}: {action} on '{target}'"
+            listbox.insert(tk.END, text)
+        # Manually trigger select event to update buttons
+        self.on_if_action_select(None)
+        self.on_else_action_select(None)
+
+
     def _add_loop_action(self):
         StepEditor(
             master=self.master,
@@ -1532,11 +1856,14 @@ class StepEditor(tk.Toplevel):
         self.simple_action_frame.pack_forget()
         self.conditional_loop_frame.pack_forget()
         self.loop_frame.pack_forget()
+        self.conditional_branch_frame.pack_forget()
 
         if step_type == 'simple':
             self.simple_action_frame.pack(fill="x", expand=True, padx=10)
         elif step_type == 'loop':
             self.loop_frame.pack(fill="x", expand=True, padx=10)
+        elif step_type == 'conditional_branch':
+            self.conditional_branch_frame.pack(fill="x", expand=True, padx=10)
         else: # conditional_loop
             self.conditional_loop_frame.pack(fill="x", expand=True, padx=10)
 
@@ -1553,13 +1880,21 @@ class StepEditor(tk.Toplevel):
         self.type_entry_frame.pack_forget()
         self.simple_offset_frame.pack_forget()
         self.scroll_frame.pack_forget()
+        self.key_combo_frame.pack_forget()
+        self.set_variable_frame.pack_forget()
 
         if action == "Type":
             self.type_entry_frame.pack(fill="x", padx=5, pady=2)
         elif action == "Click with Offset":
             self.simple_offset_frame.pack(fill="x", padx=15, pady=2)
+        elif action == "Key Combo":
+            self.key_combo_frame.pack(fill="x", padx=5, pady=2)
         elif action == "Scroll":
             self.scroll_frame.pack(fill="x", padx=15, pady=2)
+        elif action == "Set Variable":
+            self.set_variable_frame.pack(fill="x", padx=5, pady=2)
+        elif action == "OCR":
+            self.ocr_frame.pack(fill="x", padx=5, pady=2)
 
     def on_fallback_action_change(self):
         action = self.fallback_action_type.get()
@@ -1631,28 +1966,39 @@ class StepEditor(tk.Toplevel):
             action_type = step['action_type']
             if action_type == 'Type':
                 step['action_params']['text'] = self.text_to_type.get()
+            elif action_type == 'Key Combo':
+                step['action_params']['key_combo'] = self.key_combo_text.get()
+            elif action_type == 'Set Variable':
+                step['action_params']['variable_name'] = self.variable_name.get()
+                step['action_params']['variable_value'] = self.variable_value.get()
+            elif action_type == 'OCR':
+                step['action_params']['output_variable_name'] = self.output_variable_name.get()
+                step['action_params']['ocr_region'] = self.ocr_region
+                if not self.ocr_region:
+                    self.app.log("Error: OCR region is not set for this step.")
+                    return
             elif action_type == 'Click with Offset':
                 try:
                     step['action_params']['click_offset_x'] = int(self.simple_click_offset_x.get())
                     step['action_params']['click_offset_y'] = int(self.simple_click_offset_y.get())
                 except ValueError:
-                    self.master.log("Error: Click offsets must be integers.")
+                    self.app.log("Error: Click offsets must be integers.")
                     return
             elif action_type == 'Scroll':
                 try:
                     step['action_params']['scroll_direction'] = self.scroll_direction.get()
                     step['action_params']['scroll_amount'] = int(self.scroll_amount.get())
                 except ValueError:
-                    self.master.log("Error: Scroll amount must be an integer.")
+                    self.app.log("Error: Scroll amount must be an integer.")
                     return
 
             if step['detection_mode'] == 'Color':
                 step['detection_target'] = self.target_color_bgr
-                step['detection_target_name'] = self.master._bgr_to_hex(self.target_color_bgr)
+                step['detection_target_name'] = self.app._bgr_to_hex(self.target_color_bgr)
             else: # Image
                 target_names = list(self.image_listbox.get(0, tk.END))
                 if not target_names:
-                    self.master.log("Error: No template images selected for this step.")
+                    self.app.log("Error: No template images selected for this step.")
                     return
                 # Save the list of full paths for later execution
                 step['detection_target'] = [os.path.join("templates", name) for name in target_names]
@@ -1663,7 +2009,7 @@ class StepEditor(tk.Toplevel):
             try:
                 repeat_count = int(self.loop_repeat_count.get())
             except ValueError:
-                self.master.log("Error: Repetitions must be an integer.")
+                self.app.log("Error: Repetitions must be an integer.")
                 return
 
             step = {
@@ -1679,29 +2025,42 @@ class StepEditor(tk.Toplevel):
                 try:
                     max_retries = int(self.loop_max_retries.get())
                 except ValueError:
-                    self.master.log("Error: Max retries must be an integer.")
+                    self.app.log("Error: Max retries must be an integer.")
                     return
 
                 condition_target_names = list(self.until_image_listbox.get(0, tk.END))
                 if not condition_target_names:
-                    self.master.log("Error: At least one condition target image must be selected for an 'until' loop.")
+                    self.app.log("Error: At least one condition target image must be selected for an 'until' loop.")
                     return
 
                 step['loop_condition_target'] = [os.path.join("templates", name) for name in condition_target_names]
                 step['loop_condition_target_name'] = ", ".join(condition_target_names)
                 step['max_retries'] = max_retries
 
+        elif step_type == 'conditional_branch':
+            step = {
+                "step_type": "conditional_branch",
+                "condition": {
+                    "variable": self.if_variable.get(),
+                    "operator": self.if_operator.get(),
+                    "value": self.if_value.get()
+                },
+                "if_branch": self.if_branch,
+                "else_branch": self.else_branch,
+                "window_title": self.target_window_title.get(), # Retain for consistency, though not used by parent
+            }
+
         else: # conditional_loop
             try:
                 max_retries = int(self.max_retries.get())
             except ValueError:
-                self.master.log("Error: Max retries must be an integer.")
+                self.app.log("Error: Max retries must be an integer.")
                 return
 
             # Primary Target
             primary_target_names = list(self.primary_image_listbox.get(0, tk.END))
             if not primary_target_names:
-                self.master.log("Error: At least one primary target image must be selected.")
+                self.app.log("Error: At least one primary target image must be selected.")
                 return
 
             primary_target_dict = {
@@ -1717,7 +2076,7 @@ class StepEditor(tk.Toplevel):
             if fallback_action_type in ["Click", "Click with Offset"]:
                 fallback_target_names = list(self.fallback_image_listbox.get(0, tk.END))
                 if not fallback_target_names:
-                    self.master.log(f"Error: At least one fallback target image must be selected for a '{fallback_action_type}' action.")
+                    self.app.log(f"Error: At least one fallback target image must be selected for a '{fallback_action_type}' action.")
                     return
                 on_fail_dict["detection_mode"] = "Image"
                 on_fail_dict["detection_target"] = [os.path.join("templates", name) for name in fallback_target_names]
@@ -1728,14 +2087,14 @@ class StepEditor(tk.Toplevel):
                     on_fail_dict['action_params']['click_offset_x'] = int(self.fallback_drag_offset_x.get())
                     on_fail_dict['action_params']['click_offset_y'] = int(self.fallback_drag_offset_y.get())
                 except ValueError:
-                    self.master.log("Error: Fallback click offsets must be integers.")
+                    self.app.log("Error: Fallback click offsets must be integers.")
                     return
             elif fallback_action_type == "Click and Drag":
                 try:
                     on_fail_dict['action_params']['drag_offset_x'] = int(self.fallback_drag_offset_x.get())
                     on_fail_dict['action_params']['drag_offset_y'] = int(self.fallback_drag_offset_y.get())
                 except ValueError:
-                    self.master.log("Error: Fallback drag offsets must be integers.")
+                    self.app.log("Error: Fallback drag offsets must be integers.")
                     return
 
             step = {
@@ -1757,10 +2116,10 @@ class StepEditor(tk.Toplevel):
                 wait_params['min_time'] = float(self.min_wait.get())
                 wait_params['max_time'] = float(self.max_wait.get())
                 if wait_params['min_time'] >= wait_params['max_time']:
-                    self.master.log("Error: Min wait time must be less than max wait time.")
+                    self.app.log("Error: Min wait time must be less than max wait time.")
                     return
         except ValueError:
-            self.master.log("Error: Wait times must be valid numbers.")
+            self.app.log("Error: Wait times must be valid numbers.")
             return
         step['wait_params'] = wait_params
 
@@ -1894,6 +2253,23 @@ class StepEditor(tk.Toplevel):
         for target in targets:
             # The saved value might be a full path, so we take the basename
             listbox.insert(tk.END, os.path.basename(target))
+
+    def _get_ocr_region_display_text(self):
+        region = self.ocr_region
+        # Defensively check if region is a dictionary and has the required keys
+        if isinstance(region, dict) and all(k in region for k in ['x', 'y', 'width', 'height']):
+            return f"OCR Region: X={region['x']}, Y={region['y']}, W={region['width']}, H={region['height']}"
+        return "Not set. Click 'Set Region' to define the area to read."
+
+    def set_ocr_region(self):
+        self.master.log("Opening region selector for OCR...")
+        RegionSelector(self, self.on_ocr_region_selected)
+
+    def on_ocr_region_selected(self, region):
+        self.ocr_region = region
+        self.ocr_region_label_var.set(self._get_ocr_region_display_text())
+        self.master.log("OCR region set.")
+
 
 class HotkeyChangeDialog(tk.Toplevel):
     def __init__(self, master):
