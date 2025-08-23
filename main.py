@@ -1235,7 +1235,6 @@ class StepEditor(tk.Toplevel):
         self.key_combo_text = tk.StringVar(value=self.step_data.get('action_params', {}).get('key_combo', 'ctrl+c'))
         self.variable_name = tk.StringVar(value=self.step_data.get('action_params', {}).get('variable_name', ''))
         self.variable_value = tk.StringVar(value=self.step_data.get('action_params', {}).get('variable_value', ''))
-
         self.output_variable_name = tk.StringVar(value=self.step_data.get('action_params', {}).get('output_variable_name', 'ocr_result'))
         self.ocr_region = self.step_data.get('action_params', {}).get('ocr_region')
         self.ocr_region_label_var = tk.StringVar(value=self._get_ocr_region_display_text())
@@ -1377,7 +1376,6 @@ class StepEditor(tk.Toplevel):
         tk.Radiobutton(action_frame, text="Set Variable", variable=self.action_type, value="Set Variable", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
         tk.Radiobutton(action_frame, text="OCR", variable=self.action_type, value="OCR", command=self.on_action_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color).pack(anchor="w")
 
-
         self.type_entry_frame = tk.Frame(action_frame, bg=self.master.bg_color)
         self.type_entry = tk.Entry(self.type_entry_frame, textvariable=self.text_to_type, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT)
         self.type_entry.pack(fill="x", padx=5, pady=5)
@@ -1392,7 +1390,6 @@ class StepEditor(tk.Toplevel):
         tk.Entry(self.set_variable_frame, textvariable=self.variable_name, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=15).pack(side="left", padx=5)
         tk.Label(self.set_variable_frame, text="Value:", bg=self.master.bg_color, fg=self.master.text_color).pack(side="left", padx=5)
         tk.Entry(self.set_variable_frame, textvariable=self.variable_value, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=20).pack(side="left", padx=5)
-
 
         self.ocr_frame = tk.Frame(action_frame, bg=self.master.bg_color)
         ocr_var_frame = tk.Frame(self.ocr_frame, bg=self.master.bg_color)
