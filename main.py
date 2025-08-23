@@ -2459,7 +2459,9 @@ class StepEditor(tk.Toplevel):
         self.app.log(f"Step editor window target set to: {title}")
 
     def sample_color(self):
-        ColorSampler(self)
+        sampler = ColorSampler(self)
+        self.wait_window(sampler)
+        self.grab_set() # Re-grab focus
 
     def on_color_sampled(self, bgr_color):
         self.target_color_bgr = bgr_color
@@ -2468,7 +2470,9 @@ class StepEditor(tk.Toplevel):
         self.app.log(f"Step color changed to {hex_color}")
 
     def take_screenshot(self):
-        ScreenshotTaker(self)
+        taker = ScreenshotTaker(self)
+        self.wait_window(taker)
+        self.grab_set() # Re-grab focus
 
     def on_screenshot_taken(self, image):
         self.app.log("Screenshot captured for step.")
@@ -2499,7 +2503,9 @@ class StepEditor(tk.Toplevel):
 
     def set_search_region(self):
         self.app.log("Opening region selector...")
-        RegionSelector(self, self.on_region_selected)
+        selector = RegionSelector(self, self.on_region_selected)
+        self.wait_window(selector)
+        self.grab_set()
 
     def on_region_selected(self, region):
         # The region coordinates are relative to the screen. We need to make them
@@ -2579,7 +2585,9 @@ class StepEditor(tk.Toplevel):
 
     def set_ocr_region(self):
         self.app.log("Opening region selector for OCR...")
-        RegionSelector(self, self.on_ocr_region_selected)
+        selector = RegionSelector(self, self.on_ocr_region_selected)
+        self.wait_window(selector)
+        self.grab_set()
 
     def on_ocr_region_selected(self, region):
         self.ocr_region = region
