@@ -1119,6 +1119,7 @@ class App(tk.Tk):
             return
 
         now = time.localtime()
+        self.log(f"DEBUG: Checking time. Target: {hour} (type: {type(hour)}), {minute} (type: {type(minute)}). Current: {now.tm_hour} (type: {type(now.tm_hour)}), {now.tm_min} (type: {type(now.tm_min)})")
         if now.tm_hour == hour and now.tm_min == minute:
             self.log(f"Time condition met: {hour:02d}:{minute:02d}. Executing actions.")
             # Advance the parent sequence *before* pushing a new one.
