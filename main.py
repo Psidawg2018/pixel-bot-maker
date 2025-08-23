@@ -208,6 +208,13 @@ class App(tk.Tk):
         tk.Label(wait_frame, text="Configuration for default wait times will be added here.", bg=self.bg_color, fg=self.text_color, wraplength=350, justify="left").pack(pady=10, padx=5)
 
         self.log("Welcome! Please select a target window to begin.")
+        try:
+            # Attempt to get local timezone for user-friendliness
+            local_tz = time.tzname[time.daylight] if time.daylight and len(time.tzname) > 1 else time.tzname[0]
+            self.log(f"Bot's current time is {time.strftime('%Y-%m-%d %H:%M:%S')} ({local_tz}). Time conditions use the bot's system clock.")
+        except Exception:
+            # Fallback for environments where tzname might not be available
+            self.log(f"Bot's current time is {time.strftime('%Y-%m-%d %H:%M:%S')}. Time conditions use the bot's system clock.")
         self.update_most_loaded_list()
         self.after(200, lambda: self.prompt_for_window_selection(is_splash=True))
 
@@ -1121,8 +1128,8 @@ class App(tk.Tk):
                 self.execution_stack.append((actions, 0))
             self.scan_job = self.after(10, self.run_scan_loop)
         else:
-            self.log(f"Waiting for time condition: {hour:02d}:{minute:02d}. Current time: {now.tm_hour:02d}:{now.tm_min:02d}. Re-checking in 30 seconds.")
-            self.scan_job = self.after(30000, self.run_scan_loop)
+            self.log(f"Waiting for time condition: {hour:02d}:{minute:02d}. Current time: {now.tm_hour:02d}:{now.tm_min:02d}. Re-checking in 5 seconds.")
+            self.scan_job = self.after(5000, self.run_scan_loop)
 
     def log(self, message):
         timestamp = time.strftime("%H:%M:%S")
@@ -1978,6 +1985,12 @@ class StepEditor(tk.Toplevel):
         tk.Label(time_frame, text="Minute (0-59):", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
         tk.Entry(time_frame, textvariable=self.time_condition_minute, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=5).pack(side="left", padx=5)
 
+        # Add a real-time clock label
+        self.current_time_label_var = tk.StringVar()
+        current_time_label = tk.Label(time_frame, textvariable=self.current_time_label_var, bg=self.app.bg_color, fg=self.app.text_color)
+        current_time_label.pack(side="left", padx=20)
+        self._update_clock()
+
         actions_frame = tk.LabelFrame(parent_frame, text="Actions to run at specified time", bg=self.app.bg_color, fg=self.app.text_color, padx=5, pady=5)
         actions_frame.pack(pady=5, padx=10, fill="both", expand=True)
 
@@ -1997,6 +2010,17 @@ class StepEditor(tk.Toplevel):
         self.remove_time_based_action_button.pack(pady=2, fill="x")
 
         self._update_time_based_actions_listbox()
+
+    def _update_clock(self):
+        now_str = time.strftime("%H:%M:%S")
+        self.current_time_label_var.set(f"Bot Time: {now_str}")
+        self._clock_job = self.after(1000, self._update_clock)
+
+    def destroy(self):
+        # Override destroy to cancel the clock job
+        if hasattr(self, '_clock_job'):
+            self.after_cancel(self._clock_job)
+        super().destroy()
 
     def on_step_type_change(self):
         step_type = self.step_type.get()
