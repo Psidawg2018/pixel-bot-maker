@@ -46,6 +46,7 @@ class App(tk.Tk):
         self.variables = {} # For the new variable system
         self.execution_stack = [] # (sequence, index)
         self.current_retry_count = 0
+        self.step_retry_counts = {} # To track retries on a per-step basis
         self.hide_window_var = tk.BooleanVar(value=self.settings_manager.get_setting('hide_bot_default'))
         self.target_window_title = tk.StringVar()
         self.target_window_title.set("") # Set to empty string initially
@@ -507,7 +508,8 @@ class App(tk.Tk):
                 return
             self.variables.clear()
             self.execution_stack = [(self.action_sequence, 0)]
-            self.current_retry_count = 0
+            self.current_retry_count = 0 # Legacy, for conditional loops
+            self.step_retry_counts.clear() # Reset step-specific retries
             self.running = True
             self.start_button.config(text="Stop Bot")
             self.start_hotkey_listener()
@@ -933,30 +935,52 @@ class App(tk.Tk):
             # If a specific search region is defined for the step, use it instead
             if step.get('search_region'):
                 custom_region = step['search_region']
-                # The custom region coords are relative to the window, so we add the window's top-left corner
                 scan_region = {
                     'top': target_window.top + custom_region['y'],
                     'left': target_window.left + custom_region['x'],
                     'width': custom_region['width'],
                     'height': custom_region['height']
                 }
-                self.log(f"Using custom scan region for loop: {scan_region}")
-
         except Exception as e:
             self.log(f"Error getting window details: {e}. Stopping bot.")
             self.toggle_bot()
             return
 
         if self._execute_single_action(step, scan_region):
-            # On success, advance the index on the current stack frame
+            # On success, advance the index and reset retry count for this step
             sequence, index = self.execution_stack[-1]
             self.execution_stack[-1] = (sequence, index + 1)
-            self.current_retry_count = 0 # Reset for next step
-            self.log("Action complete.")
-            # The wait is handled inside _execute_single_action now
+            self.step_retry_counts[id(step)] = 0
+            self.log(f"SUCCESS: {context['number_str']} completed.")
         else:
-            self.log("Target not found. Re-scanning same step in 2 seconds...")
-            self.scan_job = self.after(2000, self.run_scan_loop)
+            # On failure, handle according to the policy
+            on_failure = step.get('on_failure', {'policy': 'Stop'})
+            policy = on_failure.get('policy', 'Stop')
+            self.log(f"FAILURE: {context['number_str']} failed. Policy: {policy}.")
+
+            if policy == 'Stop':
+                self.log("Stopping bot due to step failure.")
+                self.toggle_bot()
+                return
+
+            elif policy == 'Skip':
+                self.log("Skipping to next step.")
+                sequence, index = self.execution_stack[-1]
+                self.execution_stack[-1] = (sequence, index + 1)
+                self.scan_job = self.after(10, self.run_scan_loop) # Proceed immediately
+
+            elif policy == 'Retry':
+                max_retries = on_failure.get('retries', 3)
+                step_id = id(step)
+                current_retries = self.step_retry_counts.get(step_id, 0)
+
+                if current_retries < max_retries:
+                    self.step_retry_counts[step_id] = current_retries + 1
+                    self.log(f"Retrying step... (Attempt {current_retries + 1}/{max_retries})")
+                    self.scan_job = self.after(2000, self.run_scan_loop) # Retry same step
+                else:
+                    self.log(f"Step failed after {max_retries} retries. Stopping bot.")
+                    self.toggle_bot()
 
     def _execute_conditional_loop_step(self, step, context):
         max_retries = step.get('max_retries', 5)
@@ -1463,6 +1487,12 @@ class StepEditor(tk.Toplevel):
         self.min_wait = tk.StringVar(value=wait_params.get('min_time', '1.0'))
         self.max_wait = tk.StringVar(value=wait_params.get('max_time', '2.0'))
 
+        # Vars for On Failure
+        on_failure_params = self.step_data.get('on_failure', {})
+        self.on_failure_policy = tk.StringVar(value=on_failure_params.get('policy', 'Stop'))
+        self.on_failure_retries = tk.StringVar(value=on_failure_params.get('retries', '3'))
+
+
         # --- LAYOUT FRAMES ---
         # A bottom frame for buttons that never gets pushed out of view
         button_frame = tk.Frame(self, bg=self.app.bg_color)
@@ -1627,7 +1657,34 @@ class StepEditor(tk.Toplevel):
 
         self.on_mode_change()
         self.on_action_change()
+        self._build_on_failure_ui(parent_frame).pack(pady=10, padx=10, fill="x")
         self._build_wait_ui(parent_frame).pack(pady=10, padx=10, fill="x")
+
+    def _build_on_failure_ui(self, parent_frame):
+        on_failure_frame = tk.LabelFrame(parent_frame, text="On Failure", bg=self.app.bg_color, fg=self.app.text_color, padx=5, pady=5)
+
+        # --- Policy ---
+        policy_frame = tk.Frame(on_failure_frame, bg=self.app.bg_color)
+        tk.Label(policy_frame, text="Action on Failure:", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=(0,10))
+        tk.Radiobutton(policy_frame, text="Stop Bot", variable=self.on_failure_policy, value="Stop", command=self.on_failure_policy_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(side="left")
+        tk.Radiobutton(policy_frame, text="Skip Step", variable=self.on_failure_policy, value="Skip", command=self.on_failure_policy_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(side="left")
+        tk.Radiobutton(policy_frame, text="Retry Step", variable=self.on_failure_policy, value="Retry", command=self.on_failure_policy_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color).pack(side="left")
+        policy_frame.pack(fill="x", pady=(0,5))
+
+        # --- Retries Frame ---
+        self.retries_frame = tk.Frame(on_failure_frame, bg=self.app.bg_color)
+        tk.Label(self.retries_frame, text="Number of Retries:", bg=self.app.bg_color, fg=self.app.text_color).pack(side="left", padx=5)
+        self.retries_entry = tk.Entry(self.retries_frame, textvariable=self.on_failure_retries, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=7)
+        self.retries_entry.pack(side="left")
+
+        self.on_failure_policy_change() # Set initial visibility
+        return on_failure_frame
+
+    def on_failure_policy_change(self):
+        if self.on_failure_policy.get() == "Retry":
+            self.retries_frame.pack(fill="x", pady=2)
+        else:
+            self.retries_frame.pack_forget()
 
     def build_conditional_loop_ui(self, parent_frame):
         # --- Loop Settings ---
@@ -2140,8 +2197,19 @@ class StepEditor(tk.Toplevel):
                 "action_params": {},
                 "detection_target": None,
                 "detection_target_name": "",
-                "search_region": self.search_region
+                "search_region": self.search_region,
+                "on_failure": {}
             }
+
+            # --- Save On Failure settings ---
+            on_failure_policy = self.on_failure_policy.get()
+            step['on_failure']['policy'] = on_failure_policy
+            if on_failure_policy == 'Retry':
+                try:
+                    step['on_failure']['retries'] = int(self.on_failure_retries.get())
+                except ValueError:
+                    self.app.log("Error: 'On Failure' retries must be an integer.")
+                    return
 
             action_type = step['action_type']
             if action_type == 'Type':

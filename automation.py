@@ -37,9 +37,11 @@ def _parse_key_string(key_string):
 
     for part in parts:
         if part in KEY_MAP:
-            # It's a special key, check if it's a modifier
             key_obj = KEY_MAP[part]
-            if key_obj in [Key.ctrl, Key.alt, Key.shift, Key.cmd]:
+            # Check if the key name suggests it's a modifier. This is more robust
+            # and includes variants like 'ctrl_l', 'shift_r', etc.
+            is_modifier = any(mod in part for mod in ['ctrl', 'alt', 'shift', 'cmd'])
+            if is_modifier:
                 modifiers.append(key_obj)
             else:
                 # It's a special key but not a modifier (e.g., 'delete', 'enter')
@@ -55,7 +57,11 @@ def _parse_key_string(key_string):
             raise ValueError(f"Invalid key part: '{part}' in '{key_string}'")
 
     if main_key is None:
-        raise ValueError(f"Invalid key combination: No main key found in '{key_string}'.")
+        # A single modifier key can be a valid action (e.g. just 'shift')
+        if len(modifiers) == 1 and len(parts) == 1:
+            main_key = modifiers.pop()
+        else:
+            raise ValueError(f"Invalid key combination: No main key found in '{key_string}'.")
 
     return modifiers, main_key
 
