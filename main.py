@@ -99,7 +99,7 @@ class App(tk.Tk):
         # --- Main Tab Content ---
         # --- Sequence Editor UI ---
         sequence_frame = ttk.LabelFrame(main_tab, text="Action Sequence", padding="10")
-        sequence_frame.pack(fill="x", pady=(10, 10))
+        sequence_frame.pack(fill="both", expand=True, pady=(10, 10))
         sequence_frame.columnconfigure(0, weight=1)
 
         # Frame for Save/Load buttons
