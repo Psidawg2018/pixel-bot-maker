@@ -274,33 +274,32 @@ class App(tk.Tk):
 
     def on_window_selected(self, title):
         self.target_window_title.set(title)
-        if self.add_step_button['state'] == tk.DISABLED:
-            self.add_step_button.config(state=tk.NORMAL)
+        self.add_step_button.state(['!disabled'])
         self.log(f"Global target window set to: {title}")
 
     def on_sequence_select(self, event):
         selected_indices = self.sequence_listbox.curselection()
         if selected_indices:
             index = selected_indices[0]
-            self.edit_step_button.config(state=tk.NORMAL)
-            self.remove_step_button.config(state=tk.NORMAL)
+            self.edit_step_button.state(['!disabled'])
+            self.remove_step_button.state(['!disabled'])
 
             # Enable/disable Move Up button
             if index > 0:
-                self.move_up_button.config(state=tk.NORMAL)
+                self.move_up_button.state(['!disabled'])
             else:
-                self.move_up_button.config(state=tk.DISABLED)
+                self.move_up_button.state(['disabled'])
 
             # Enable/disable Move Down button
             if index < len(self.action_sequence) - 1:
-                self.move_down_button.config(state=tk.NORMAL)
+                self.move_down_button.state(['!disabled'])
             else:
-                self.move_down_button.config(state=tk.DISABLED)
+                self.move_down_button.state(['disabled'])
         else:
-            self.edit_step_button.config(state=tk.DISABLED)
-            self.remove_step_button.config(state=tk.DISABLED)
-            self.move_up_button.config(state=tk.DISABLED)
-            self.move_down_button.config(state=tk.DISABLED)
+            self.edit_step_button.state(['disabled'])
+            self.remove_step_button.state(['disabled'])
+            self.move_up_button.state(['disabled'])
+            self.move_down_button.state(['disabled'])
 
     def add_step(self):
         StepEditor(self)
