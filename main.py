@@ -1366,31 +1366,30 @@ class StepEditor(tk.Toplevel):
 
         # --- LAYOUT FRAMES ---
         # A bottom frame for buttons that never gets pushed out of view
-        button_frame = tk.Frame(self, bg=self.master.bg_color)
+        button_frame = tk.Frame(self, bg=self.app.bg_color)
         button_frame.pack(side="bottom", fill="x", pady=10, padx=10)
 
         # A main content frame that can expand and scroll
-        content_frame = tk.Frame(self, bg=self.master.bg_color)
+        content_frame = tk.Frame(self, bg=self.app.bg_color)
         content_frame.pack(side="top", fill="both", expand=True)
 
         # --- WIDGETS ---
         # --- Step Type Selection ---
-        step_type_frame = tk.LabelFrame(content_frame, text="Step Type", bg=self.master.bg_color, fg=self.master.text_color, padx=5, pady=5)
+        step_type_frame = tk.LabelFrame(content_frame, text="Step Type", bg=self.app.bg_color, fg=self.app.text_color, padx=5, pady=5)
         step_type_frame.pack(pady=10, padx=10, fill="x")
         self.step_type_radios = {}
         step_types = [("Simple Action", "simple"), ("If/Else", "conditional_branch"), ("Loop", "loop"), ("Conditional (Legacy)", "conditional_loop")]
         for text, value in step_types:
-            radio = tk.Radiobutton(step_type_frame, text=text, variable=self.step_type, value=value, command=self.on_step_type_change, bg=self.master.bg_color, fg=self.master.text_color, selectcolor=self.master.widget_bg_color)
+            radio = tk.Radiobutton(step_type_frame, text=text, variable=self.step_type, value=value, command=self.on_step_type_change, bg=self.app.bg_color, fg=self.app.text_color, selectcolor=self.app.widget_bg_color)
             radio.pack(side="left", padx=5)
             self.step_type_radios[value] = radio
 
 
         # --- Main Frames for each step type (parented to content_frame) ---
-        self.simple_action_frame = tk.Frame(content_frame, bg=self.master.bg_color)
-        self.conditional_loop_frame = tk.Frame(content_frame, bg=self.master.bg_color)
-        self.loop_frame = tk.Frame(content_frame, bg=self.master.bg_color)
-        self.conditional_branch_frame = tk.Frame(content_frame, bg=self.master.bg_color)
-
+        self.simple_action_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.conditional_loop_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.loop_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.conditional_branch_frame = tk.Frame(content_frame, bg=self.app.bg_color)
 
         # --- UI for Simple Action Frame ---
         self.build_simple_action_ui(self.simple_action_frame)
@@ -1405,8 +1404,8 @@ class StepEditor(tk.Toplevel):
         self.build_conditional_branch_ui(self.conditional_branch_frame)
 
         # --- Save/Cancel Buttons (parented to button_frame) ---
-        tk.Button(button_frame, text="Cancel", command=self.destroy, bg=self.master.widget_bg_color, fg=self.master.text_color, relief=tk.FLAT, width=10).pack(side="right", padx=10)
-        tk.Button(button_frame, text="Save Step", command=self.on_save, bg=self.master.button_color, fg=self.master.button_text_color, relief=tk.FLAT, width=10).pack(side="right")
+        tk.Button(button_frame, text="Cancel", command=self.destroy, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, width=10).pack(side="right", padx=10)
+        tk.Button(button_frame, text="Save Step", command=self.on_save, bg=self.app.button_color, fg=self.app.button_text_color, relief=tk.FLAT, width=10).pack(side="right")
 
         self.on_step_type_change() # Set initial view
 
