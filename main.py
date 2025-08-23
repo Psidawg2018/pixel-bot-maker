@@ -97,10 +97,14 @@ class App(tk.Tk):
         notebook.add(settings_tab, text='Settings')
 
         # --- Main Tab Content ---
+        main_tab.columnconfigure(0, weight=1)
+        main_tab.rowconfigure(0, weight=1) # Make the sequence frame expandable
+
         # --- Sequence Editor UI ---
         sequence_frame = ttk.LabelFrame(main_tab, text="Action Sequence", padding="10")
-        sequence_frame.pack(fill="both", expand=True, pady=(10, 10))
+        sequence_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
         sequence_frame.columnconfigure(0, weight=1)
+        sequence_frame.rowconfigure(1, weight=1)
 
         # Frame for Save/Load buttons
         file_io_frame = ttk.Frame(sequence_frame)
@@ -111,6 +115,7 @@ class App(tk.Tk):
         list_container = ttk.Frame(sequence_frame)
         list_container.grid(row=1, column=0, sticky="nsew")
         list_container.columnconfigure(0, weight=1)
+        list_container.rowconfigure(0, weight=1)
         self.sequence_listbox = tk.Listbox(list_container, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, height=10)
         self.sequence_listbox.grid(row=0, column=0, sticky="nsew")
         self.sequence_listbox.bind("<<ListboxSelect>>", self.on_sequence_select)
@@ -130,20 +135,20 @@ class App(tk.Tk):
 
         # --- Final Controls ---
         controls_frame = ttk.LabelFrame(main_tab, text="Global Target", padding="10")
-        controls_frame.pack(pady=10, fill="x")
-
+        controls_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         self.target_window_label = ttk.Label(controls_frame, textvariable=self.target_window_title, wraplength=380, justify="left", style="Card.TLabel")
         self.target_window_label.pack(pady=5, fill="x", expand=True, ipady=5)
         ttk.Button(controls_frame, text="Change Target Window", command=self.prompt_for_window_selection).pack(pady=(10,5))
 
         # --- Most Loaded Sequences ---
         most_loaded_frame = ttk.LabelFrame(main_tab, text="Frequently Used", padding="10")
-        most_loaded_frame.pack(pady=10, fill="x")
+        most_loaded_frame.grid(row=2, column=0, sticky="ew")
         self.most_loaded_container = ttk.Frame(most_loaded_frame)
         self.most_loaded_container.pack(fill="x", pady=5)
 
         bot_controls_frame = ttk.Frame(main_tab)
-        bot_controls_frame.pack(pady=10, fill="x", side="bottom")
+        bot_controls_frame.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        bot_controls_frame.columnconfigure(0, weight=1)
 
         self.hide_window_check = ttk.Checkbutton(bot_controls_frame, text="Hide window when bot is running", variable=self.hide_window_var)
         self.hide_window_check.pack()
