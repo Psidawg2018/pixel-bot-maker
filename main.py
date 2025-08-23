@@ -2143,36 +2143,41 @@ class StepEditor(tk.Toplevel):
 
     def on_mode_change(self):
         if self.detection_mode.get() == "Color":
-            self.image_frame.pack_forget()
-            self.color_frame.pack(pady=10, padx=10, fill="x")
+            self.image_frame.grid_remove()
+            self.color_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         else:
-            self.color_frame.pack_forget()
-            self.image_frame.pack(pady=10, padx=10, fill="x")
+            self.color_frame.grid_remove()
+            self.image_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 10))
 
     def on_action_change(self):
         action = self.action_type.get()
-        self.type_entry_frame.pack_forget()
-        self.simple_offset_frame.pack_forget()
-        self.scroll_frame.pack_forget()
-        self.key_combo_frame.pack_forget()
-        self.set_variable_frame.pack_forget()
-        self.modify_variable_frame.pack_forget()
-        self.ocr_frame.pack_forget()
+
+        # Hide all action-specific frames first
+        self.type_entry_frame.grid_remove()
+        self.simple_offset_frame.grid_remove()
+        self.scroll_frame.grid_remove()
+        self.key_combo_frame.grid_remove()
+        self.set_variable_frame.grid_remove()
+        self.modify_variable_frame.grid_remove()
+        self.ocr_frame.grid_remove()
+
+        # The grid row for these frames should be after the radio buttons
+        action_row = 10 # A number greater than the number of radio buttons
 
         if action == "Type":
-            self.type_entry_frame.pack(fill="x", padx=5, pady=2)
+            self.type_entry_frame.grid(row=action_row, column=0, columnspan=2, sticky="ew", pady=5)
         elif action == "Click with Offset":
-            self.simple_offset_frame.pack(fill="x", padx=15, pady=2)
+            self.simple_offset_frame.grid(row=action_row, column=0, columnspan=2, sticky="ew", pady=5, padx=20)
         elif action == "Key Combo":
-            self.key_combo_frame.pack(fill="x", padx=5, pady=2)
+            self.key_combo_frame.grid(row=action_row, column=0, columnspan=2, sticky="ew", pady=5)
         elif action == "Scroll":
-            self.scroll_frame.pack(fill="x", padx=15, pady=2)
+            self.scroll_frame.grid(row=action_row, column=0, columnspan=2, sticky="ew", pady=5, padx=20)
         elif action == "Set Variable":
-            self.set_variable_frame.pack(fill="x", padx=5, pady=2)
+            self.set_variable_frame.grid(row=action_row, column=0, columnspan=2, sticky="ew", pady=5)
         elif action == "Modify Variable":
-            self.modify_variable_frame.pack(fill="x", padx=5, pady=2)
+            self.modify_variable_frame.grid(row=action_row, column=0, columnspan=2, sticky="ew", pady=5)
         elif action == "OCR":
-            self.ocr_frame.pack(fill="x", padx=5, pady=2)
+            self.ocr_frame.grid(row=action_row, column=0, columnspan=2, sticky="ew", pady=5)
 
     def on_fallback_action_change(self):
         action = self.fallback_action_type.get()
