@@ -83,6 +83,11 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ## Changelog
 
+### v0.7.3 - (2025-08-23)
+- **Counter Variables & Variable Modification.**
+- Added a new **Modify Variable** action to perform arithmetic (add/subtract) or `set` operations on variables, enabling counters and more dynamic logic.
+- Improved the action list display for non-UI actions (`Set Variable`, `Modify Variable`, `OCR`).
+
 ### v0.7.2 - (2025-08-22)
 - **If/Else Chains.**
 - Added a new **If/Else** step to allow for conditional branching in automation sequences.
@@ -173,7 +178,7 @@ Here’s a "Hello World" style tutorial to get you started:
 ### ⚡ v0.7 – Logic & Intelligence
 - [x] If/Else Chains (multi-branch logic)
 - [x] Variable System: Simple text variables
-- [ ] Counter Variables (track action counts)
+ - [x] Counter Variables (track action counts)
 - [ ] Time-based Conditions (scheduled logic)
 - [ ] Success/Failure Tracking (log pass/fail, allow retry/skip)
 - [x] OCR Support (text recognition for UI elements)
