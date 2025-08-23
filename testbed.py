@@ -1,214 +1,326 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
-from PIL import Image, ImageTk, ImageDraw
-import random, time
+from tkinter import ttk, messagebox, font
+from PIL import Image, ImageTk, ImageDraw, ImageFont
+import random
+import time
+import os
 
+# --- UTILITY FUNCTIONS ---
 
-# Function to generate random placeholder images
-def create_random_image(label, size=(200, 100)):
-    colors = ["lightblue", "lightgreen", "lightyellow", "pink", "orange", "lavender"]
-    color = random.choice(colors)
+def get_font_path(font_name="arial.ttf"):
+    """Gets a path to a common font, checking system folders."""
+    font_path = None
+    if os.name == 'nt':  # Windows
+        font_path = os.path.join(os.environ['SystemRoot'], 'Fonts', font_name)
+    elif os.name == 'posix':  # macOS, Linux
+        common_paths = [
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',  # Ubuntu
+            '/System/Library/Fonts/Supplemental/Arial.ttf',      # macOS
+            '/usr/share/fonts/corefonts/arial.ttf',              # Other Linux
+        ]
+        for path in common_paths:
+            if os.path.exists(path):
+                font_path = path
+                break
+    if not os.path.exists(font_path):
+        return "sans-serif" # Fallback to a generic font
+    return font_path
 
-    img = Image.new("RGB", size, color)
+# --- IMAGE GENERATION ---
+
+def create_text_image(text, size=(250, 80), bg_color=None, noise=False):
+    """Creates an image with text, supporting different fonts, colors, and noise."""
+    colors = ["#FFDDC1", "#C1FFD7", "#DDC1FF", "#FFC1C1", "#C1D7FF"]
+    bg_color = bg_color if bg_color else random.choice(colors)
+    img = Image.new("RGB", size, bg_color)
     draw = ImageDraw.Draw(img)
-    text = f"{label}\n{random.randint(1000,9999)}"
+
+    # Add random noise
+    if noise:
+        for _ in range(random.randint(500, 1500)):
+            x, y = random.randint(0, size[0]-1), random.randint(0, size[1]-1)
+            noise_color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+            draw.point((x, y), fill=noise_color)
+
+    font_size = random.randint(25, 35)
     try:
-        # Use anchor positioning for modern Pillow versions
-        draw.text((size[0]//2, size[1]//2), text, fill="black", anchor="mm")
-    except TypeError:
-        # Fallback for older Pillow versions
-        w, h = draw.textsize(text)
-        draw.text(((size[0]-w)//2, (size[1]-h)//2), text, fill="black")
+        # Use a real font file if available for better rendering
+        font_path = get_font_path("arial.ttf")
+        if font_path != "sans-serif":
+            pil_font = ImageFont.truetype(font_path, font_size)
+        else:
+            pil_font = ImageFont.load_default() # Fallback
+    except IOError:
+        pil_font = ImageFont.load_default()
+
+    text_color = random.choice(["#000000", "#D92027", "#3E4A61", "#5D2E8C"])
+    draw.text((size[0]//2, size[1]//2), text, font=pil_font, fill=text_color, anchor="mm")
+
     return ImageTk.PhotoImage(img)
 
 
-# Function to generate random text
-def random_text():
-    samples = [
-        "The quick brown fox jumps over the lazy dog.",
-        "Artificial Intelligence is reshaping the world.",
-        "1234567890 OCR TEST DATA HERE.",
-        "Python is a powerful language for automation.",
-        "Every test should include some random noise.",
-        "ZEBRAS and APPLES make good OCR stress tests.",
-        "Current timestamp: " + time.strftime("%Y-%m-%d %H:%M:%S")
-    ]
-    return random.choice(samples)
+def create_fuzzy_image(size=(100, 100)):
+    """Creates an image with a central shape that changes slightly."""
+    img = Image.new("RGB", size, "white")
+    draw = ImageDraw.Draw(img)
+    # Base shape
+    draw.rectangle([20, 20, 80, 80], fill="blue")
+    # Add a smaller, slightly offset shape to make it "fuzzy"
+    offset_x = random.randint(-5, 5)
+    offset_y = random.randint(-5, 5)
+    draw.rectangle([45 + offset_x, 45 + offset_y, 55 + offset_x, 55 + offset_y], fill="yellow")
+    return ImageTk.PhotoImage(img)
 
+# --- MAIN APPLICATION ---
 
-class TestApp(tk.Tk):
+class TestBotApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Robust OCR & Automation Test App")
-        self.minsize(600, 700)
+        self.title("Advanced Bot Testbed")
+        self.geometry("700x800")
+        self.protocol("WM_DELETE_WINDOW", self.quit)
 
-        # Store images (regenerate each refresh)
         self.images = {}
-        self.refresh_content()
+        self.dynamic_elements = {}
+        self.refresh_all_content()
 
-        # Container for multiple pages
         container = ttk.Frame(self)
         container.pack(fill="both", expand=True)
+        container.grid_rowconfigure(0, weight=1)
+        container.grid_columnconfigure(0, weight=1)
 
         self.frames = {}
-        for Page in (PageOne, PageTwo, PageThree):
-            frame = Page(parent=container, controller=self)
-            self.frames[Page] = frame
+        for F in (PageOCR, PageDynamicUI, PageScrolling):
+            page_name = F.__name__
+            frame = F(parent=container, controller=self)
+            self.frames[page_name] = frame
             frame.grid(row=0, column=0, sticky="nsew")
 
-        self.show_frame(PageOne)
+        self.show_frame("PageOCR")
 
-    def refresh_content(self):
-        self.images = {
-            "page1": create_random_image("Page 1"),
-            "page2": create_random_image("Page 2"),
-            "page3": create_random_image("Page 3"),
-        }
-        self.random_text1 = random_text()
-        self.random_text2 = random_text()
-        self.random_text3 = random_text()
+    def refresh_all_content(self):
+        # OCR Page content
+        self.dynamic_number = random.randint(10000, 99999)
+        self.images["ocr_easy"] = create_text_image(f"CODE: {self.dynamic_number}", bg_color="#E0E0E0")
+        self.images["ocr_hard"] = create_text_image(f"ID: {self.dynamic_number}", bg_color="#333333", noise=True)
 
-        # If pages exist, update them on refresh
+        # Dynamic UI Page content
+        self.dynamic_elements["secret_button_visible"] = False
+        self.dynamic_elements["conditional_image"] = random.choice(["success", "failure"])
+        self.images["success"] = create_text_image("SUCCESS", size=(150,60), bg_color="lightgreen")
+        self.images["failure"] = create_text_image("FAILURE", size=(150,60), bg_color="lightcoral")
+        self.dynamic_elements["button_pos"] = random.choice([(0.2, 0.6), (0.4, 0.7), (0.6, 0.65)])
+
+        # Scrolling Page content
+        self.images["fuzzy"] = create_fuzzy_image()
+
+        # Refresh visible frames
         for frame in getattr(self, "frames", {}).values():
             if hasattr(frame, "refresh_page"):
                 frame.refresh_page()
 
-    def show_frame(self, page_class):
-        frame = self.frames[page_class]
+    def show_frame(self, page_name):
+        frame = self.frames[page_name]
         frame.tkraise()
+        self.title(f"Advanced Bot Testbed - {page_name}")
 
 
-class PageOne(ttk.Frame):
+class PageOCR(ttk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
+        self.counter_val = 0
+
+        # --- Structure ---
+        top_frame = ttk.Frame(self)
+        top_frame.pack(pady=20, padx=20, fill="x")
+        ttk.Label(top_frame, text="Page 1: OCR & Variables", font=("Arial", 18, "bold")).pack()
+        ttk.Button(top_frame, text="Refresh Content", command=self.controller.refresh_all_content).pack(pady=5)
+
+        # --- OCR Targets ---
+        ocr_frame = ttk.LabelFrame(self, text="OCR Targets", padding=10)
+        ocr_frame.pack(pady=10, padx=20, fill="x")
+        ttk.Label(ocr_frame, text="Easy Target (Clean Background)").pack()
+        self.ocr_easy_label = ttk.Label(ocr_frame)
+        self.ocr_easy_label.pack(pady=5)
+
+        ttk.Separator(ocr_frame, orient="horizontal").pack(fill="x", pady=10)
+
+        ttk.Label(ocr_frame, text="Hard Target (Noisy Background, Different Font/Color)").pack()
+        self.ocr_hard_label = ttk.Label(ocr_frame)
+        self.ocr_hard_label.pack(pady=5)
+
+        # --- Variable & Loop Test ---
+        logic_frame = ttk.LabelFrame(self, text="Logic, Variables & Loops", padding=10)
+        logic_frame.pack(pady=10, padx=20, fill="x")
+
+        ttk.Label(logic_frame, text="Enter the 5-digit code from the images above:").pack()
+        self.code_entry = ttk.Entry(logic_frame, font=("Courier", 12))
+        self.code_entry.pack(pady=5)
+        ttk.Button(logic_frame, text="Submit Code", command=self.check_code).pack()
+
+        ttk.Separator(logic_frame, orient="horizontal").pack(fill="x", pady=15)
+
+        ttk.Label(logic_frame, text="Click the button below to increment the counter.").pack()
+        self.counter_btn = ttk.Button(logic_frame, text="Increment Counter", command=self.increment_counter)
+        self.counter_btn.pack(pady=5)
+        self.counter_label = ttk.Label(logic_frame, text="Counter: 0", font=("Arial", 14))
+        self.counter_label.pack()
+
+        # --- Navigation ---
+        nav_frame = ttk.Frame(self)
+        nav_frame.pack(side="bottom", pady=20)
+        ttk.Button(nav_frame, text="Go to Page 2 (Dynamic UI)", command=lambda: controller.show_frame("PageDynamicUI")).pack()
+
+        self.refresh_page()
+
+    def refresh_page(self):
+        self.ocr_easy_label.config(image=self.controller.images["ocr_easy"])
+        self.ocr_hard_label.config(image=self.controller.images["ocr_hard"])
+        self.counter_val = 0
+        self.counter_label.config(text="Counter: 0")
+        self.code_entry.delete(0, "end")
+
+    def check_code(self):
+        entered = self.code_entry.get()
+        actual = str(self.controller.dynamic_number)
+        if entered == actual:
+            messagebox.showinfo("Success", "The code is correct!")
+        else:
+            messagebox.showerror("Failure", f"Incorrect. You entered {entered}, but the code was {actual}.")
+
+    def increment_counter(self):
+        self.counter_val += 1
+        self.counter_label.config(text=f"Counter: {self.counter_val}")
+
+
+class PageDynamicUI(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
 
-        self.label_title = ttk.Label(self, text="This is Page 1", font=("Arial", 16))
-        self.label_title.pack(pady=10)
+        top_frame = ttk.Frame(self)
+        top_frame.pack(pady=20, padx=20, fill="x")
+        ttk.Label(top_frame, text="Page 2: Dynamic UI & Conditionals", font=("Arial", 18, "bold")).pack()
+        ttk.Button(top_frame, text="Refresh Content", command=self.controller.refresh_all_content).pack(pady=5)
 
-        self.image_label = ttk.Label(self, image=controller.images["page1"])
-        self.image_label.pack(pady=5)
+        self.main_area = tk.Canvas(self, bg="#F0F0F0")
+        self.main_area.pack(fill="both", expand=True, padx=20, pady=10)
 
-        self.text_label = ttk.Label(self, text=controller.random_text1, wraplength=500)
-        self.text_label.pack(pady=5)
+        # --- Conditional Logic ---
+        ttk.Label(self.main_area, text="Click 'Reveal' to show a conditional image.").place(relx=0.5, rely=0.1, anchor="center")
+        self.reveal_btn = ttk.Button(self.main_area, text="Reveal Image", command=self.reveal_image)
+        self.reveal_btn.place(relx=0.5, rely=0.15, anchor="center")
+        self.conditional_image_label = ttk.Label(self.main_area)
 
-        ttk.Label(self, text="Enter your name:").pack(pady=2)
-        self.name_entry = ttk.Entry(self)
-        self.name_entry.pack(pady=2)
+        # --- Dynamic Positioning ---
+        ttk.Label(self.main_area, text="This button moves on refresh.").place(relx=0.5, rely=0.55, anchor="center")
+        self.moving_btn = ttk.Button(self.main_area, text="Find Me!")
+        self.moving_btn.bind("<Button-1>", lambda e: messagebox.showinfo("Found!", "You clicked the moving button!"))
 
-        ttk.Button(self, text="Submit Name", command=self.submit_name).pack(pady=5)
+        # --- Hidden Element ---
+        ttk.Label(self.main_area, text="Click the buttons in the correct order (A -> B -> C) to reveal a secret.").place(relx=0.5, rely=0.8, anchor="center")
+        self.click_order = []
+        btn_a = ttk.Button(self.main_area, text="A", command=lambda: self.log_click("A"))
+        btn_a.place(relx=0.4, rely=0.85, anchor="center")
+        btn_b = ttk.Button(self.main_area, text="B", command=lambda: self.log_click("B"))
+        btn_b.place(relx=0.5, rely=0.85, anchor="center")
+        btn_c = ttk.Button(self.main_area, text="C", command=lambda: self.log_click("C"))
+        btn_c.place(relx=0.6, rely=0.85, anchor="center")
+        self.secret_btn = ttk.Button(self.main_area, text="SECRET", command=lambda: messagebox.showinfo("Secret Found!", "You unlocked the secret!"))
+
 
         nav_frame = ttk.Frame(self)
-        nav_frame.pack(pady=20)
-        ttk.Button(nav_frame, text="Go to Page 2", command=lambda: controller.show_frame(PageTwo)).grid(row=0, column=0, padx=5)
-        ttk.Button(nav_frame, text="Refresh Content", command=controller.refresh_content).grid(row=0, column=1, padx=5)
+        nav_frame.pack(side="bottom", pady=20)
+        ttk.Button(nav_frame, text="Go to Page 1 (OCR)", command=lambda: controller.show_frame("PageOCR")).pack(side="left", padx=10)
+        ttk.Button(nav_frame, text="Go to Page 3 (Scrolling)", command=lambda: controller.show_frame("PageScrolling")).pack(side="right", padx=10)
+
+        self.refresh_page()
 
     def refresh_page(self):
-        self.image_label.config(image=self.controller.images["page1"])
-        self.text_label.config(text=self.controller.random_text1)
+        self.conditional_image_label.place_forget()
+        self.secret_btn.place_forget()
+        self.click_order = []
+        pos = self.controller.dynamic_elements["button_pos"]
+        self.moving_btn.place(relx=pos[0], rely=pos[1], anchor="center")
 
-    def submit_name(self):
-        name = self.name_entry.get()
-        messagebox.showinfo("Submitted", f"Hello, {name}!")
+    def reveal_image(self):
+        img_key = self.controller.dynamic_elements["conditional_image"]
+        self.conditional_image_label.config(image=self.controller.images[img_key])
+        self.conditional_image_label.place(relx=0.5, rely=0.3, anchor="center")
+
+    def log_click(self, letter):
+        self.click_order.append(letter)
+        if len(self.click_order) > 3:
+            self.click_order.pop(0)
+        if self.click_order == ["A", "B", "C"]:
+            self.secret_btn.place(relx=0.5, rely=0.92, anchor="center")
 
 
-class PageTwo(ttk.Frame):
+class PageScrolling(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
 
-        ttk.Label(self, text="This is Page 2", font=("Arial", 16)).pack(pady=10)
+        top_frame = ttk.Frame(self)
+        top_frame.pack(pady=20, padx=20, fill="x")
+        ttk.Label(top_frame, text="Page 3: Scrolling & Advanced Actions", font=("Arial", 18, "bold")).pack()
+        ttk.Button(top_frame, text="Refresh Content", command=self.controller.refresh_all_content).pack(pady=5)
 
-        self.image_label = ttk.Label(self, image=controller.images["page2"])
-        self.image_label.pack(pady=5)
+        # --- Scrollable Area ---
+        canvas = tk.Canvas(self)
+        scrollbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
 
-        self.text_label = ttk.Label(self, text=controller.random_text2, wraplength=500)
-        self.text_label.pack(pady=5)
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
 
-        ttk.Label(self, text="Enter a number:").pack(pady=2)
-        self.num_entry = ttk.Entry(self)
-        self.num_entry.pack(pady=2)
+        canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        scrollbar.pack(side="right", fill="y")
 
-        ttk.Button(self, text="Double It", command=self.double_number).pack(pady=5)
+        # --- Content for Scrolling ---
+        for i in range(30):
+            text = f"Item #{i+1}"
+            if i == 24: text = "--- TARGET ITEM ---"
+            label = ttk.Label(scrollable_frame, text=text, font=("Consolas", 12))
+            label.pack(pady=8, padx=20, anchor="w")
+            if i == 24:
+                label.config(font=("Consolas", 14, "bold"), foreground="red")
 
+        # --- Context Menu (Right-Click) Test ---
+        ctx_frame = ttk.LabelFrame(scrollable_frame, text="Right-Click Test", padding=10)
+        ctx_frame.pack(pady=20, padx=10, fill="x")
+        self.ctx_label = ttk.Label(ctx_frame, text="Right-click me for options!", padding=20, relief="solid")
+        self.ctx_label.pack()
+        self.context_menu = tk.Menu(self, tearoff=0)
+        self.context_menu.add_command(label="Option 1", command=lambda: self.ctx_action(1))
+        self.context_menu.add_command(label="Option 2", command=lambda: self.ctx_action(2))
+        self.ctx_label.bind("<Button-3>", self.show_context_menu)
+
+        # --- Fuzzy Image Matching ---
+        fuzzy_frame = ttk.LabelFrame(scrollable_frame, text="Fuzzy Image Matching", padding=10)
+        fuzzy_frame.pack(pady=20, padx=10, fill="x")
+        self.fuzzy_label = ttk.Label(fuzzy_frame)
+        self.fuzzy_label.pack()
+
+        # --- Navigation ---
         nav_frame = ttk.Frame(self)
-        nav_frame.pack(pady=20)
-        ttk.Button(nav_frame, text="Back to Page 1", command=lambda: controller.show_frame(PageOne)).grid(row=0, column=0, padx=5)
-        ttk.Button(nav_frame, text="Go to Page 3", command=lambda: controller.show_frame(PageThree)).grid(row=0, column=1, padx=5)
-        ttk.Button(nav_frame, text="Refresh Content", command=controller.refresh_content).grid(row=0, column=2, padx=5)
+        nav_frame.pack(side="bottom", pady=20)
+        ttk.Button(nav_frame, text="Go to Page 2 (Dynamic UI)", command=lambda: controller.show_frame("PageDynamicUI")).pack()
+
+        self.refresh_page()
 
     def refresh_page(self):
-        self.image_label.config(image=self.controller.images["page2"])
-        self.text_label.config(text=self.controller.random_text2)
+        self.fuzzy_label.config(image=self.controller.images["fuzzy"])
 
-    def double_number(self):
-        try:
-            val = int(self.num_entry.get())
-            result = val * 2
-            messagebox.showinfo("Result", f"Double is {result}")
-        except ValueError:
-            messagebox.showerror("Error", "Please enter a valid number.")
+    def show_context_menu(self, event):
+        self.context_menu.post(event.x_root, event.y_root)
 
-
-class PageThree(ttk.Frame):
-    def __init__(self, parent, controller):
-        super().__init__(parent)
-        self.controller = controller
-
-        ttk.Label(self, text="This is Page 3", font=("Arial", 16)).pack(pady=10)
-
-        self.image_label = ttk.Label(self, image=controller.images["page3"])
-        self.image_label.pack(pady=5)
-
-        self.text_label = ttk.Label(self, text=controller.random_text3, wraplength=500)
-        self.text_label.pack(pady=5)
-
-        # Checkboxes
-        ttk.Label(self, text="Select your favorite fruits:").pack(pady=5)
-        self.var_apple = tk.BooleanVar()
-        self.var_banana = tk.BooleanVar()
-        self.var_cherry = tk.BooleanVar()
-        ttk.Checkbutton(self, text="Apple", variable=self.var_apple).pack(anchor="w")
-        ttk.Checkbutton(self, text="Banana", variable=self.var_banana).pack(anchor="w")
-        ttk.Checkbutton(self, text="Cherry", variable=self.var_cherry).pack(anchor="w")
-
-        # Radio buttons
-        ttk.Label(self, text="Choose your gender:").pack(pady=5)
-        self.gender = tk.StringVar(value="None")
-        ttk.Radiobutton(self, text="Male", variable=self.gender, value="Male").pack(anchor="w")
-        ttk.Radiobutton(self, text="Female", variable=self.gender, value="Female").pack(anchor="w")
-        ttk.Radiobutton(self, text="Other", variable=self.gender, value="Other").pack(anchor="w")
-
-        # Text box
-        ttk.Label(self, text="Enter a paragraph of text:").pack(pady=5)
-        self.text_box = tk.Text(self, width=50, height=5)
-        self.text_box.pack(pady=5)
-
-        ttk.Button(self, text="Submit Form", command=self.submit_form).pack(pady=10)
-
-        nav_frame = ttk.Frame(self)
-        nav_frame.pack(pady=20)
-        ttk.Button(nav_frame, text="Back to Page 2", command=lambda: controller.show_frame(PageTwo)).grid(row=0, column=0, padx=5)
-        ttk.Button(nav_frame, text="Go to Page 1", command=lambda: controller.show_frame(PageOne)).grid(row=0, column=1, padx=5)
-        ttk.Button(nav_frame, text="Refresh Content", command=controller.refresh_content).grid(row=0, column=2, padx=5)
-
-    def refresh_page(self):
-        self.image_label.config(image=self.controller.images["page3"])
-        self.text_label.config(text=self.controller.random_text3)
-
-    def submit_form(self):
-        fruits = []
-        if self.var_apple.get(): fruits.append("Apple")
-        if self.var_banana.get(): fruits.append("Banana")
-        if self.var_cherry.get(): fruits.append("Cherry")
-
-        gender = self.gender.get()
-        text_content = self.text_box.get("1.0", "end").strip()
-
-        summary = f"Fruits: {', '.join(fruits) if fruits else 'None'}\nGender: {gender}\nText: {text_content}"
-        messagebox.showinfo("Form Submitted", summary)
+    def ctx_action(self, option):
+        messagebox.showinfo("Context Menu", f"You selected Option {option}.")
 
 
 if __name__ == "__main__":
-    app = TestApp()
+    app = TestBotApp()
     app.mainloop()
