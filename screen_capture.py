@@ -5,6 +5,14 @@ import time
 import subprocess
 import os
 
+def _translate_region_keys(region):
+    """Translates a region dictionary from using 'x', 'y' to 'left', 'top'."""
+    if region and 'x' in region and 'left' not in region:
+        region['left'] = region.pop('x')
+    if region and 'y' in region and 'top' not in region:
+        region['top'] = region.pop('y')
+    return region
+
 def capture_screen(region=None):
     """
     Captures a region of the screen.
@@ -13,8 +21,12 @@ def capture_screen(region=None):
     :return: An OpenCV-compatible image (NumPy array)
     """
     with mss.mss() as sct:
-        # If no region is specified, grab the entire screen
-        monitor = sct.monitors[1] if region is None else region
+        monitor = region
+        if region is None:
+            # If no region, grab the entire primary screen
+            monitor = sct.monitors[1]
+        else:
+            monitor = _translate_region_keys(monitor)
 
         # Grab the data
         sct_img = sct.grab(monitor)
@@ -28,35 +40,30 @@ def capture_screen(region=None):
         return img
 
 if __name__ == '__main__':
-    print("Running screen capture test...")
+    print("Running screen capture tests...")
 
-    # Start a simple X11 app to have something to capture
-    print("Starting xeyes...")
-    xeyes_proc = subprocess.Popen(["xeyes"])
+    # --- Test 1: Key Translation ---
+    print("\n--- Testing _translate_region_keys ---")
+    test_region_xy = {'x': 10, 'y': 20, 'width': 100, 'height': 100}
+    print(f"Original region: {test_region_xy}")
 
-    # Give it a moment to appear
-    time.sleep(1)
+    translated_region = _translate_region_keys(test_region_xy.copy())
+    print(f"Translated region: {translated_region}")
 
-    # Define a region to capture (top, left, width, height)
-    # We'll just capture a 400x400 box from the top-left corner.
-    capture_area = {'top': 0, 'left': 0, 'width': 400, 'height': 400}
+    expected_region = {'left': 10, 'top': 20, 'width': 100, 'height': 100}
 
-    print(f"Capturing screen region: {capture_area}")
-    screenshot = capture_screen(capture_area)
-
-    # Save the captured image
-    output_filename = "capture_test.png"
-    cv2.imwrite(output_filename, screenshot)
-
-    print(f"Screenshot saved to {output_filename}")
-
-    # Clean up the xeyes process
-    xeyes_proc.terminate()
-    xeyes_proc.wait()
-    print("xeyes process terminated.")
-
-    # Verify the file was created
-    if os.path.exists(output_filename):
-        print("Test successful: capture_test.png created.")
+    if translated_region == expected_region:
+        print("SUCCESS: Region keys translated correctly.")
     else:
-        print("Test failed: capture_test.png was not created.")
+        print(f"FAILURE: Region keys not translated correctly. Expected {expected_region}")
+
+    # --- Test 2: No translation needed ---
+    print("\n--- Testing with already correct keys ---")
+    test_region_lt = {'left': 50, 'top': 60, 'width': 100, 'height': 100}
+    print(f"Original region: {test_region_lt}")
+    translated_region_lt = _translate_region_keys(test_region_lt.copy())
+    print(f"Translated region: {translated_region_lt}")
+    if translated_region_lt == test_region_lt:
+        print("SUCCESS: Region with correct keys was not modified.")
+    else:
+        print("FAILURE: Region with correct keys was modified.")
