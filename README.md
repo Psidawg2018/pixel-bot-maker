@@ -63,6 +63,16 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ## Changelog
 
+### v0.8 - (2025-08-23)
+- **User Experience Upgrade & Bug Fix.**
+- Added a new **Action Preview** feature to show where the bot will click before executing.
+- Added a new **Dry Run Mode** to simulate a sequence without performing any actions.
+- Added **Real-time Step Highlighting** in the GUI.
+- Added **Undo/Redo** for sequence editing.
+- Added **Action Templates** for common sequences.
+- Added **Emergency Stop Options** (e.g., screen edge detection, mouse shake).
+- Fixed a bug where the retry counter for "Conditional (Legacy)" loops was not reset correctly, causing subsequent loops to have fewer retries than intended.
+
 ### v0.7.5 - (2025-08-23)
 - **Success/Failure Tracking & Bug Fix.**
 - Added a new **On Failure** setting for simple actions, allowing the user to configure the bot to **Stop**, **Skip Step**, or **Retry Step** a set number of times if a target is not found.
@@ -144,7 +154,7 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ## 🛣️ Roadmap
 
-### ✅ Completed (v0.1 – v0.7)
+### ✅ Completed (v0.1 – v0.8)
 - [x] Core action sequencer (click, type, click offset, drag, fallback logic)
 - [x] Conditional loops with fallback actions
 - [x] Save/load sequences
@@ -164,16 +174,12 @@ Here’s a "Hello World" style tutorial to get you started:
 - [x] Time-based Conditions (scheduled logic)
 - [x] Success/Failure Tracking (log pass/fail, allow retry/skip)
 - [x] OCR Support (text recognition for UI elements)
-
----
-
-### 🎨 v0.8 – User Experience Upgrade
-- [ ] Action Preview: Show where the bot will click before executing
-- [ ] Dry Run Mode (simulate sequence without actions)
-- [ ] Real-time Step Highlighting in the GUI
-- [ ] Undo/Redo for sequence editing
-- [ ] Action Templates (common sequences like login loops, farming cycles, scroll lists)
-- [ ] Emergency Stop Options (screen edge detection, mouse shake, etc.)
+- [x] Action Preview: Show where the bot will click before executing
+- [x] Dry Run Mode (simulate sequence without actions)
+- [x] Real-time Step Highlighting in the GUI
+- [x] Undo/Redo for sequence editing
+- [x] Action Templates (common sequences like login loops, farming cycles, scroll lists)
+- [x] Emergency Stop Options (screen edge detection, mouse shake, etc.)
 
 ---
 
