@@ -63,6 +63,10 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ## Changelog
 
+### v0.8.1 - (2025-08-24)
+- **New Feature**: Added a **Dry Run Mode** to simulate a bot sequence by logging actions without executing them, allowing for safer testing.
+- **Bug Fix**: Fixed a bug where **Time-based Conditions** would re-trigger multiple times within the same minute instead of only once.
+
 ### v0.8 - (2025-08-23)
 - **New Feature**: Added a **Default Wait Times** setting to configure the default post-action wait for new steps.
 - **Bug Fix**: The **Action Preview** feature now works correctly, displaying a visual indicator without freezing the application.
@@ -149,7 +153,7 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ## 🛣️ Roadmap
 
-### ✅ Completed (v0.1 – v0.8)
+### ✅ Completed (v0.1 – v0.8.1)
 - [x] Core action sequencer (click, type, click offset, drag, fallback logic)
 - [x] Conditional loops with fallback actions
 - [x] Save/load sequences
@@ -170,11 +174,11 @@ Here’s a "Hello World" style tutorial to get you started:
 - [x] Success/Failure Tracking (log pass/fail, allow retry/skip)
 - [x] OCR Support (text recognition for UI elements)
 - [x] Action Preview: Show where the bot will click before executing
+- [x] Dry Run Mode (simulate sequence without actions)
 
 ---
 
 ### 🎨 v0.8 – User Experience Upgrade
-- [ ] Dry Run Mode (simulate sequence without actions)
 - [ ] Real-time Step Highlighting in the GUI
 - [ ] Undo/Redo for sequence editing
 - [ ] Action Templates (common sequences like login loops, farming cycles, scroll lists)
