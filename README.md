@@ -63,6 +63,9 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ## Changelog
 
+### v0.8.2 - (2025-08-24)
+- **Bug Fix**: Fixed a critical bug where running a sequence with steps that had no post-action wait time would cause the application to freeze due to an infinite recursive loop.
+
 ### v0.8.1 - (2025-08-24)
 - **New Feature**: Added a **Dry Run Mode** to simulate a bot sequence by logging actions without executing them, allowing for safer testing.
 - **Bug Fix**: Fixed a bug where **Time-based Conditions** would re-trigger multiple times within the same minute instead of only once.

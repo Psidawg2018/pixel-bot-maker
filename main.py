@@ -632,8 +632,9 @@ class App(tk.Tk):
             self.log(f"Waiting for {wait_duration:.2f} seconds...")
             self.scan_job = self.after(wait_ms, self.run_scan_loop)
         else:
-            # If no wait, or wait is 0, proceed to the next step immediately.
-            self.run_scan_loop()
+            # If no wait, or wait is 0, proceed to the next step immediately,
+            # but use after(10) to yield to the main GUI loop and prevent freezing.
+            self.scan_job = self.after(10, self.run_scan_loop)
 
     def _substitute_variables(self, text):
         """
