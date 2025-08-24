@@ -88,3 +88,4 @@ You can store and reuse text using variables.
 -   **Themes:** Choose between a light or dark theme in the Settings tab.
 -   **Hotkeys:** Customize the global hotkey used to start and stop the bot.
 -   **Post-Action Wait:** For any step, you can configure a wait time (either fixed or random) that occurs *after* the step's action is completed successfully. This is useful for making the bot's actions appear more human-like.
+-   **Action Preview:** For click-based actions, the bot will briefly display a red square at the target location before performing the click. This gives you a visual confirmation of the bot's target, helping to debug and build confidence in your automation sequence.
