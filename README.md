@@ -149,7 +149,7 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ## 🛣️ Roadmap
 
-### ✅ Completed (v0.1 – v0.7)
+### ✅ Completed (v0.1 – v0.8)
 - [x] Core action sequencer (click, type, click offset, drag, fallback logic)
 - [x] Conditional loops with fallback actions
 - [x] Save/load sequences
