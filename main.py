@@ -24,7 +24,7 @@ class App(tk.Tk):
         super().__init__()
         self.title("Pixel Bot")
         self.settings_manager = SettingsManager()
-        self.geometry("800x600")
+        self.geometry("800x660")
 
         # --- Color Theme ---
         self.sleek_blue_theme = {
@@ -113,15 +113,16 @@ class App(tk.Tk):
         ttk.Button(file_io_frame, text="Save Sequence", command=self.save_sequence).pack(side="left")
 
         list_container = ttk.Frame(sequence_frame)
-        list_container.grid(row=1, column=0, sticky="nsew")
+        list_container.grid(row=1, column=0, columnspan=2, sticky="nsew")
         list_container.columnconfigure(0, weight=1)
         list_container.rowconfigure(0, weight=1)
+
         self.sequence_listbox = tk.Listbox(list_container, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, height=10)
-        self.sequence_listbox.pack(fill="both", expand=True)
+        self.sequence_listbox.grid(row=0, column=0, sticky="nsew")
         self.sequence_listbox.bind("<<ListboxSelect>>", self.on_sequence_select)
 
-        seq_button_frame = ttk.Frame(sequence_frame)
-        seq_button_frame.grid(row=1, column=1, sticky="ns", padx=(5,0))
+        seq_button_frame = ttk.Frame(list_container)
+        seq_button_frame.grid(row=0, column=1, sticky="ns", padx=(5,0))
         self.add_step_button = ttk.Button(seq_button_frame, text="Add", command=self.add_step, state=tk.DISABLED)
         self.add_step_button.pack(pady=2, fill="x")
         self.edit_step_button = ttk.Button(seq_button_frame, text="Edit", command=self.edit_step, state=tk.DISABLED)
@@ -207,10 +208,34 @@ class App(tk.Tk):
         self.change_hotkey_button = ttk.Button(hotkey_inner_frame, text="Change...", command=self.change_hotkey)
         self.change_hotkey_button.pack(side="left", padx=5)
 
-        # Placeholder for Default Wait Times UI
-        wait_frame = ttk.LabelFrame(settings_content_frame, text="Default Wait Times (Coming Soon)", padding="10")
-        wait_frame.pack(fill="x", pady=5, anchor="n")
-        ttk.Label(wait_frame, text="Configuration for default wait times will be added here.", wraplength=350, justify="left").pack(pady=10, padx=5)
+        # --- Default Wait Times UI ---
+        self.wait_frame = ttk.LabelFrame(settings_content_frame, text="Default Post-Action Wait", padding="10")
+        self.wait_frame.pack(fill="x", pady=5, anchor="n")
+
+        default_wait_settings = self.settings_manager.get_setting('default_wait_times')
+        self.default_wait_type = tk.StringVar(value=default_wait_settings.get('type', 'Fixed'))
+        self.default_fixed_wait = tk.StringVar(value=str(default_wait_settings.get('fixed_time', 1)))
+        self.default_min_wait = tk.StringVar(value=str(default_wait_settings.get('min_time', 1)))
+        self.default_max_wait = tk.StringVar(value=str(default_wait_settings.get('max_time', 2)))
+
+        wait_type_frame = ttk.Frame(self.wait_frame)
+        ttk.Radiobutton(wait_type_frame, text="Fixed", variable=self.default_wait_type, value="Fixed", command=self.on_default_wait_type_change).pack(side="left")
+        ttk.Radiobutton(wait_type_frame, text="Random", variable=self.default_wait_type, value="Random", command=self.on_default_wait_type_change).pack(side="left")
+        wait_type_frame.pack(fill="x", pady=(0,5))
+
+        self.default_fixed_wait_frame = ttk.Frame(self.wait_frame)
+        ttk.Label(self.default_fixed_wait_frame, text="Default Fixed Wait (sec):").pack(side="left", padx=5)
+        ttk.Entry(self.default_fixed_wait_frame, textvariable=self.default_fixed_wait, width=7).pack(side="left")
+
+        self.default_random_wait_frame = ttk.Frame(self.wait_frame)
+        ttk.Label(self.default_random_wait_frame, text="Min (sec):").pack(side="left", padx=5)
+        ttk.Entry(self.default_random_wait_frame, textvariable=self.default_min_wait, width=7).pack(side="left")
+        ttk.Label(self.default_random_wait_frame, text="Max (sec):").pack(side="left", padx=(10,5))
+        ttk.Entry(self.default_random_wait_frame, textvariable=self.default_max_wait, width=7).pack(side="left")
+
+        ttk.Button(self.wait_frame, text="Save Default Waits", command=self.save_default_wait_times).pack(pady=(10,0))
+
+        self.on_default_wait_type_change()
 
         self.log("Welcome! Please select a target window to begin.")
         try:
@@ -489,6 +514,35 @@ class App(tk.Tk):
         theme = self.theme_var.get()
         self.settings_manager.set_setting('theme', theme)
         self.log("Theme changed. Please restart the application for the changes to take full effect.")
+
+    def on_default_wait_type_change(self):
+        wait_type = self.default_wait_type.get()
+        if wait_type == "Fixed":
+            self.default_fixed_wait_frame.pack(fill="x", pady=2)
+            self.default_random_wait_frame.pack_forget()
+        elif wait_type == "Random":
+            self.default_fixed_wait_frame.pack_forget()
+            self.default_random_wait_frame.pack(fill="x", pady=2)
+        else: # Should not happen with radio buttons
+            self.default_fixed_wait_frame.pack_forget()
+            self.default_random_wait_frame.pack_forget()
+
+    def save_default_wait_times(self):
+        try:
+            new_settings = {
+                "type": self.default_wait_type.get(),
+                "fixed_time": float(self.default_fixed_wait.get()),
+                "min_time": float(self.default_min_wait.get()),
+                "max_time": float(self.default_max_wait.get())
+            }
+            if new_settings['min_time'] >= new_settings['max_time']:
+                self.log("Error: Min wait time must be less than max wait time.")
+                return
+
+            self.settings_manager.set_setting('default_wait_times', new_settings)
+            self.log("Default wait times saved successfully.")
+        except ValueError:
+            self.log("Error: Wait times must be valid numbers.")
 
     def change_hotkey(self):
         HotkeyChangeDialog(self)
@@ -913,13 +967,13 @@ class App(tk.Tk):
             abs_y = scan_region['top'] + target_pos[1]
 
             # --- Action Preview ---
-            preview_duration = 1.0 # in seconds
+            preview_duration = 0.5 # in seconds
             action_type = action_step['action_type']
+            # TODO: Make this a setting
             if action_type in ["Click", "Right-click", "Click with Offset"]:
                 self.log(f"    - Previewing action at ({abs_x}, {abs_y}) for {preview_duration}s...")
                 preview = ActionPreview(self, abs_x, abs_y, duration=int(preview_duration * 1000))
-                self.update_idletasks()
-                time.sleep(preview_duration)
+                self.wait_window(preview)
 
 
             action_params = action_step.get('action_params', {})
@@ -1532,11 +1586,18 @@ class StepEditor(tk.Toplevel):
         self.time_based_actions = self.step_data.get('actions', [])
 
         # Vars for Post-Action Wait
-        wait_params = self.step_data.get('wait_params', {})
-        self.wait_type = tk.StringVar(value=wait_params.get('type', 'None'))
-        self.fixed_wait = tk.StringVar(value=wait_params.get('fixed_time', '1.0'))
-        self.min_wait = tk.StringVar(value=wait_params.get('min_time', '1.0'))
-        self.max_wait = tk.StringVar(value=wait_params.get('max_time', '2.0'))
+        wait_params = self.step_data.get('wait_params')
+        if wait_params is None: # It's a new step, so load the defaults from settings
+            default_wait_params = self.app.settings_manager.get_setting('default_wait_times')
+            self.wait_type = tk.StringVar(value='None') # Default to None for new steps
+            self.fixed_wait = tk.StringVar(value=str(default_wait_params.get('fixed_time', 1)))
+            self.min_wait = tk.StringVar(value=str(default_wait_params.get('min_time', 1)))
+            self.max_wait = tk.StringVar(value=str(default_wait_params.get('max_time', 2)))
+        else: # It's an existing step, load its saved values
+            self.wait_type = tk.StringVar(value=wait_params.get('type', 'None'))
+            self.fixed_wait = tk.StringVar(value=str(wait_params.get('fixed_time', 1)))
+            self.min_wait = tk.StringVar(value=str(wait_params.get('min_time', 1)))
+            self.max_wait = tk.StringVar(value=str(wait_params.get('max_time', 2)))
 
         # Vars for On Failure
         on_failure_params = self.step_data.get('on_failure', {})

@@ -85,7 +85,11 @@ You can store and reuse text using variables.
 
 -   **Screen Region Locking:** For any step that involves finding a target, you can define a specific rectangular area of the target window to search within. This makes the search much faster and more reliable, as the bot won't look for the image outside of this defined region.
 -   **Image Similarity Threshold:** In the Settings tab, you can adjust the similarity threshold for image matching. A lower value (e.g., `0.7`) is "fuzzier" and will match images that are slightly different, while a higher value (e.g., `0.95`) requires a near-perfect match.
--   **Themes:** Choose between a light or dark theme in the Settings tab.
+-   **Theme:** The application uses a sleek dark theme.
 -   **Hotkeys:** Customize the global hotkey used to start and stop the bot.
--   **Post-Action Wait:** For any step, you can configure a wait time (either fixed or random) that occurs *after* the step's action is completed successfully. This is useful for making the bot's actions appear more human-like.
+-   **On Failure Policy:** For any "Simple Action" step, you can define what the bot should do if it fails to find the target.
+    -   **Stop:** The bot will stop execution immediately (the default behavior).
+    -   **Skip Step:** The bot will ignore the current step and move to the next one.
+    -   **Retry Step:** The bot will try to find the target again, up to a specified number of times, before stopping.
+-   **Post-Action Wait:** For any step, you can configure a wait time (either fixed or random) that occurs *after* the step's action is completed successfully. You can also set the global default wait times in the Settings tab.
 -   **Action Preview:** For click-based actions, the bot will briefly display a red square at the target location before performing the click. This gives you a visual confirmation of the bot's target, helping to debug and build confidence in your automation sequence.
