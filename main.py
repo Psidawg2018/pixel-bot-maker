@@ -50,7 +50,9 @@ class App(tk.Tk):
         self.execution_stack = [] # (sequence, index)
         self.conditional_loop_retry_counts = {}
         self.step_retry_counts = {} # To track retries on a per-step basis
+        self.time_condition_executed = set() # To prevent re-triggering
         self.hide_window_var = tk.BooleanVar(value=self.settings_manager.get_setting('hide_bot_default'))
+        self.dry_run_var = tk.BooleanVar(value=False)
         self.target_window_title = tk.StringVar()
         self.target_window_title.set("") # Set to empty string initially
 
@@ -153,6 +155,9 @@ class App(tk.Tk):
 
         self.hide_window_check = ttk.Checkbutton(bot_controls_frame, text="Hide window when bot is running", variable=self.hide_window_var)
         self.hide_window_check.pack()
+
+        self.dry_run_check = ttk.Checkbutton(bot_controls_frame, text="Dry Run (log actions without executing)", variable=self.dry_run_var)
+        self.dry_run_check.pack(pady=5)
 
         self.start_button = ttk.Button(bot_controls_frame, text="Start Bot", command=self.toggle_bot, style="Accent.TButton")
         self.start_button.pack(pady=10)
@@ -600,6 +605,7 @@ class App(tk.Tk):
             self.execution_stack = [(self.action_sequence, 0)]
             self.conditional_loop_retry_counts.clear() # Reset all conditional loop counters
             self.step_retry_counts.clear() # Reset step-specific retries
+            self.time_condition_executed.clear() # Reset executed time conditions
             self.running = True
             self.start_button.config(text="Stop Bot")
             self.start_hotkey_listener()
@@ -969,43 +975,47 @@ class App(tk.Tk):
             # --- Action Preview ---
             preview_duration = 0.5 # in seconds
             action_type = action_step['action_type']
-            # TODO: Make this a setting
-            if action_type in ["Click", "Right-click", "Click with Offset"]:
-                self.log(f"    - Previewing action at ({abs_x}, {abs_y}) for {preview_duration}s...")
-                preview = ActionPreview(self, abs_x, abs_y, duration=int(preview_duration * 1000))
-                self.wait_window(preview)
+            if not self.dry_run_var.get():
+                # TODO: Make this a setting
+                if action_type in ["Click", "Right-click", "Click with Offset"]:
+                    self.log(f"    - Previewing action at ({abs_x}, {abs_y}) for {preview_duration}s...")
+                    preview = ActionPreview(self, abs_x, abs_y, duration=int(preview_duration * 1000))
+                    self.wait_window(preview)
 
 
             action_params = action_step.get('action_params', {})
 
-            if action_type == "Click":
-                self.log(f"    - Performing action: Click at ({abs_x}, {abs_y})")
-                click_at(abs_x, abs_y)
-            elif action_type == "Right-click":
-                self.log(f"    - Performing action: Right-click at ({abs_x}, {abs_y})")
-                right_click_at(abs_x, abs_y)
-            elif action_type == "Click with Offset":
-                offset_x = action_params.get('click_offset_x', 0)
-                offset_y = action_params.get('click_offset_y', 0)
-                click_x = abs_x + offset_x
-                click_y = abs_y + offset_y
-                self.log(f"    - Performing action: Click with offset at ({click_x}, {click_y})")
-                click_at(click_x, click_y)
-            elif action_type == "Type":
-                text_to_type = action_params.get('text', '')
-                substituted_text = self._substitute_variables(text_to_type)
-                self.log(f"    - Performing action: Type '{substituted_text}'")
-                type_text(substituted_text)
-            elif action_type == "Key Combo":
-                key_combo = action_params.get('key_combo', '')
-                substituted_combo = self._substitute_variables(key_combo)
-                self.log(f"    - Performing action: Press keys '{substituted_combo}'")
-                press_key_combination(substituted_combo)
-            elif action_type == "Scroll":
-                direction = action_params.get('scroll_direction', 'Down')
-                amount = action_params.get('scroll_amount', 5)
-                self.log(f"    - Performing action: Scroll {direction} by {amount}")
-                scroll_wheel(direction.lower(), amount)
+            if self.dry_run_var.get():
+                self.log(f"    - [DRY RUN] Would perform action: {action_type}")
+            else:
+                if action_type == "Click":
+                    self.log(f"    - Performing action: Click at ({abs_x}, {abs_y})")
+                    click_at(abs_x, abs_y)
+                elif action_type == "Right-click":
+                    self.log(f"    - Performing action: Right-click at ({abs_x}, {abs_y})")
+                    right_click_at(abs_x, abs_y)
+                elif action_type == "Click with Offset":
+                    offset_x = action_params.get('click_offset_x', 0)
+                    offset_y = action_params.get('click_offset_y', 0)
+                    click_x = abs_x + offset_x
+                    click_y = abs_y + offset_y
+                    self.log(f"    - Performing action: Click with offset at ({click_x}, {click_y})")
+                    click_at(click_x, click_y)
+                elif action_type == "Type":
+                    text_to_type = action_params.get('text', '')
+                    substituted_text = self._substitute_variables(text_to_type)
+                    self.log(f"    - Performing action: Type '{substituted_text}'")
+                    type_text(substituted_text)
+                elif action_type == "Key Combo":
+                    key_combo = action_params.get('key_combo', '')
+                    substituted_combo = self._substitute_variables(key_combo)
+                    self.log(f"    - Performing action: Press keys '{substituted_combo}'")
+                    press_key_combination(substituted_combo)
+                elif action_type == "Scroll":
+                    direction = action_params.get('scroll_direction', 'Down')
+                    amount = action_params.get('scroll_amount', 5)
+                    self.log(f"    - Performing action: Scroll {direction} by {amount}")
+                    scroll_wheel(direction.lower(), amount)
 
             # Sub-actions have waits too
             self._handle_post_action_wait(action_step)
@@ -1175,27 +1185,32 @@ class App(tk.Tk):
             self.log("Fallback action: Doing nothing.")
             return True
         elif action_type == "Click and Drag":
+            if self.dry_run_var.get():
+                self.log("Fallback action: [DRY RUN] Would perform 'Click and Drag'.")
+            else:
+                self.log("Fallback action: Performing 'Click and Drag'.")
+                params = action_details.get('action_params', {})
+                offset_x = params.get('drag_offset_x', 0)
+                offset_y = params.get('drag_offset_y', 0)
 
-            self.log("Fallback action: Performing 'Click and Drag'.")
-            params = action_details.get('action_params', {})
-            offset_x = params.get('drag_offset_x', 0)
-            offset_y = params.get('drag_offset_y', 0)
+                start_x = scan_region['left'] + scan_region['width'] // 2
+                start_y = scan_region['top'] + scan_region['height'] // 2
+                end_x = start_x + offset_x
+                end_y = start_y + offset_y
 
-            start_x = scan_region['left'] + scan_region['width'] // 2
-            start_y = scan_region['top'] + scan_region['height'] // 2
-            end_x = start_x + offset_x
-            end_y = start_y + offset_y
-
-            self.log(f"Dragging from window center ({start_x}, {start_y}) to ({end_x}, {end_y})")
-            click_and_drag(start_x, start_y, end_x, end_y)
+                self.log(f"Dragging from window center ({start_x}, {start_y}) to ({end_x}, {end_y})")
+                click_and_drag(start_x, start_y, end_x, end_y)
             return True
 
         elif action_type == "Scroll":
-            params = action_details.get('action_params', {})
-            direction = params.get('scroll_direction', 'Down')
-            amount = params.get('scroll_amount', 5)
-            self.log(f"Fallback action: Scrolling {direction} by {amount}")
-            scroll_wheel(direction.lower(), amount)
+            if self.dry_run_var.get():
+                self.log("Fallback action: [DRY RUN] Would scroll.")
+            else:
+                params = action_details.get('action_params', {})
+                direction = params.get('scroll_direction', 'Down')
+                amount = params.get('scroll_amount', 5)
+                self.log(f"Fallback action: Scrolling {direction} by {amount}")
+                scroll_wheel(direction.lower(), amount)
             return True
         elif action_type == "Click" or action_type == "Click with Offset":
             self.log(f"Fallback: Finding '{action_details.get('detection_target_name')}' for action '{action_type}'.")
@@ -1215,17 +1230,20 @@ class App(tk.Tk):
                 abs_x = scan_region['left'] + target_pos[0]
                 abs_y = scan_region['top'] + target_pos[1]
 
-                if action_type == "Click":
-                    self.log(f"Fallback action: Clicking at ({abs_x}, {abs_y})")
-                    click_at(abs_x, abs_y)
-                else: # Click with Offset
-                    params = action_details.get('action_params', {})
-                    offset_x = params.get('click_offset_x', 0)
-                    offset_y = params.get('click_offset_y', 0)
-                    click_x = abs_x + offset_x
-                    click_y = abs_y + offset_y
-                    self.log(f"Fallback action: Click with offset at ({click_x}, {click_y})")
-                    click_at(click_x, click_y)
+                if self.dry_run_var.get():
+                    self.log(f"Fallback action: [DRY RUN] Would perform '{action_type}' at ({abs_x}, {abs_y})")
+                else:
+                    if action_type == "Click":
+                        self.log(f"Fallback action: Clicking at ({abs_x}, {abs_y})")
+                        click_at(abs_x, abs_y)
+                    else: # Click with Offset
+                        params = action_details.get('action_params', {})
+                        offset_x = params.get('click_offset_x', 0)
+                        offset_y = params.get('click_offset_y', 0)
+                        click_x = abs_x + offset_x
+                        click_y = abs_y + offset_y
+                        self.log(f"Fallback action: Click with offset at ({click_x}, {click_y})")
+                        click_at(click_x, click_y)
                 return True
             else:
                 self.log("Fallback target not found.")
@@ -1245,14 +1263,25 @@ class App(tk.Tk):
             return
 
         now = time.localtime()
-        self.log(f"DEBUG: Checking time. Target: {hour} (type: {type(hour)}), {minute} (type: {type(minute)}). Current: {now.tm_hour} (type: {type(now.tm_hour)}), {now.tm_min} (type: {type(now.tm_min)})")
+        time_key = (hour, minute)
+
         if now.tm_hour == hour and now.tm_min == minute:
+            if time_key in self.time_condition_executed:
+                self.log(f"Time condition {hour:02d}:{minute:02d} already executed this cycle. Advancing.")
+                # Condition was met and executed, so we just advance the parent sequence
+                self.execution_stack[-1] = (context['sequence'], context['index'] + 1)
+                self.scan_job = self.after(10, self.run_scan_loop)
+                return
+
             self.log(f"Time condition met: {hour:02d}:{minute:02d}. Executing actions.")
+            self.time_condition_executed.add(time_key) # Mark as executed
+
             # Advance the parent sequence *before* pushing a new one.
             self.execution_stack[-1] = (context['sequence'], context['index'] + 1)
             actions = step.get('actions', [])
             if actions:
                 self.execution_stack.append((actions, 0))
+            # After executing, immediately continue to the next step in the main loop
             self.scan_job = self.after(10, self.run_scan_loop)
         else:
             self.log(f"Waiting for time condition: {hour:02d}:{minute:02d}. Current time: {now.tm_hour:02d}:{now.tm_min:02d}. Re-checking in 5 seconds.")
