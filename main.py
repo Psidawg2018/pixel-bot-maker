@@ -24,7 +24,7 @@ class App(tk.Tk):
         super().__init__()
         self.title("Pixel Bot")
         self.settings_manager = SettingsManager()
-        self.geometry("800x600")
+        self.geometry("800x660")
 
         # --- Color Theme ---
         self.sleek_blue_theme = {
