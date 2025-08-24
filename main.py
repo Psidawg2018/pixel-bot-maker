@@ -714,16 +714,23 @@ class App(tk.Tk):
 
         # Handle non-UI actions first
         if action_type == 'Set Variable':
-            var_name = current_step.get('action_params', {}).get('variable_name')
-            var_value = self._substitute_variables(current_step.get('action_params', {}).get('variable_value')) # Allow variables in values
-            if var_name:
-                self.log(f"Setting variable '{var_name}' to '{var_value}'")
-                self.variables[var_name] = var_value
-                self.execution_stack[-1] = (current_sequence, current_index + 1)
-                self._handle_post_action_wait(current_step) # Still respect wait times
-            else:
+            params = current_step.get('action_params', {})
+            var_name = params.get('variable_name')
+            var_value = self._substitute_variables(params.get('variable_value')) # Allow variables in values
+
+            if not var_name:
                 self.log(f"Error in {step_number_str}: 'Set Variable' action has no variable name. Stopping bot.")
                 self.toggle_bot()
+                return
+
+            if self.dry_run_var.get():
+                self.log(f"[DRY RUN] Would set variable '{var_name}' to '{var_value}'")
+            else:
+                self.log(f"Setting variable '{var_name}' to '{var_value}'")
+                self.variables[var_name] = var_value
+
+            self.execution_stack[-1] = (current_sequence, current_index + 1)
+            self._handle_post_action_wait(current_step) # Still respect wait times
             return
         elif action_type == 'Modify Variable':
             params = current_step.get('action_params', {})
@@ -738,31 +745,34 @@ class App(tk.Tk):
 
             current_value_str = self.variables.get(var_name, '0')
 
-            if operation == 'set':
-                self.variables[var_name] = value_str
-                self.log(f"Set variable '{var_name}' to '{value_str}'")
-            else: # add or subtract
-                try:
-                    current_value = float(current_value_str)
-                    value_to_op = float(value_str)
-                    new_value = 0
-                    if operation == 'add':
-                        new_value = current_value + value_to_op
-                    elif operation == 'subtract':
-                        new_value = current_value - value_to_op
+            if self.dry_run_var.get():
+                self.log(f"[DRY RUN] Would {operation} variable '{var_name}' by '{value_str}'")
+            else:
+                if operation == 'set':
+                    self.variables[var_name] = value_str
+                    self.log(f"Set variable '{var_name}' to '{value_str}'")
+                else: # add or subtract
+                    try:
+                        current_value = float(current_value_str)
+                        value_to_op = float(value_str)
+                        new_value = 0
+                        if operation == 'add':
+                            new_value = current_value + value_to_op
+                        elif operation == 'subtract':
+                            new_value = current_value - value_to_op
 
-                    # Store as int if it's a whole number, otherwise float
-                    if new_value == int(new_value):
-                        self.variables[var_name] = str(int(new_value))
-                    else:
-                        self.variables[var_name] = str(new_value)
+                        # Store as int if it's a whole number, otherwise float
+                        if new_value == int(new_value):
+                            self.variables[var_name] = str(int(new_value))
+                        else:
+                            self.variables[var_name] = str(new_value)
 
-                    self.log(f"Variable '{var_name}' {operation}ed by {value_to_op}. New value: {self.variables[var_name]}")
+                        self.log(f"Variable '{var_name}' {operation}ed by {value_to_op}. New value: {self.variables[var_name]}")
 
-                except ValueError:
-                    self.log(f"Error in {step_number_str}: Cannot perform arithmetic on non-numeric variable '{var_name}' (value: '{current_value_str}') or input '{value_str}'. Stopping bot.")
-                    self.toggle_bot()
-                    return
+                    except ValueError:
+                        self.log(f"Error in {step_number_str}: Cannot perform arithmetic on non-numeric variable '{var_name}' (value: '{current_value_str}') or input '{value_str}'. Stopping bot.")
+                        self.toggle_bot()
+                        return
 
             self.execution_stack[-1] = (current_sequence, current_index + 1)
             self._handle_post_action_wait(current_step)
@@ -777,18 +787,24 @@ class App(tk.Tk):
                 self.toggle_bot()
                 return
 
-            self.log(f"Performing OCR on region {region} and saving to '{output_var}'...")
-            screenshot = capture_screen(region)
-            from image_analyzer import extract_text_from_image
-            extracted_text = extract_text_from_image(screenshot)
+            if self.dry_run_var.get():
+                self.log(f"[DRY RUN] Would perform OCR on region {region} and save to '{output_var}'")
+                # In a dry run, we can't know the result, so we'll save a placeholder
+                self.variables[output_var] = "DRY_RUN_OCR_RESULT"
+            else:
+                self.log(f"Performing OCR on region {region} and saving to '{output_var}'...")
+                screenshot = capture_screen(region)
+                from image_analyzer import extract_text_from_image
+                extracted_text = extract_text_from_image(screenshot)
 
-            if extracted_text == "TESSERACT_NOT_FOUND":
-                self.log("FATAL: Tesseract OCR engine not found. Please install it to use the OCR feature. Stopping bot.")
-                self.toggle_bot()
-                return
+                if extracted_text == "TESSERACT_NOT_FOUND":
+                    self.log("FATAL: Tesseract OCR engine not found. Please install it to use the OCR feature. Stopping bot.")
+                    self.toggle_bot()
+                    return
 
-            self.log(f"OCR Result: '{extracted_text}'. Stored in variable '{output_var}'.")
-            self.variables[output_var] = extracted_text
+                self.log(f"OCR Result: '{extracted_text}'. Stored in variable '{output_var}'.")
+                self.variables[output_var] = extracted_text
+
             self.execution_stack[-1] = (current_sequence, current_index + 1)
             self._handle_post_action_wait(current_step)
             return
