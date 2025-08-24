@@ -64,9 +64,9 @@ Here’s a "Hello World" style tutorial to get you started:
 ## Changelog
 
 ### v0.8 - (2025-08-23)
-- **Action Preview & GUI Layout Fix.**
-- Added a new **Action Preview** feature that displays a red box at the target location before a click action occurs.
-- Fixed a persistent GUI layout bug where buttons in the Action Sequence list could be cut off on initial window load.
+- **New Feature**: Added a **Default Wait Times** setting to configure the default post-action wait for new steps.
+- **Bug Fix**: The **Action Preview** feature now works correctly, displaying a visual indicator without freezing the application.
+- **Bug Fix**: Fixed a GUI layout issue where the "Remove" button in the Action Sequence list was not fully visible.
 
 ### v0.7.5 - (2025-08-23)
 - **Success/Failure Tracking & Bug Fix.**
@@ -153,9 +153,9 @@ Here’s a "Hello World" style tutorial to get you started:
 - [x] Core action sequencer (click, type, click offset, drag, fallback logic)
 - [x] Conditional loops with fallback actions
 - [x] Save/load sequences
-- [x] Post-action wait (fixed/random)
+- [x] Post-action wait (fixed/random) with configurable defaults
 - [x] Frequently Used list
-- [x] GUI refinements (two-column layout, step reordering, theme selection, hotkeys, hide bot option)
+- [x] GUI refinements (two-column layout, step reordering, theme selection, hotkeys, hide bot option, layout fixes)
 - [x] Loop Controls: "Repeat X times" and "Loop until condition"
 - [x] Multiple Image Matching (OR logic in one step)
 - [x] Image Similarity Threshold (fuzzy matching)
@@ -169,11 +169,11 @@ Here’s a "Hello World" style tutorial to get you started:
 - [x] Time-based Conditions (scheduled logic)
 - [x] Success/Failure Tracking (log pass/fail, allow retry/skip)
 - [x] OCR Support (text recognition for UI elements)
+- [x] Action Preview: Show where the bot will click before executing
 
 ---
 
 ### 🎨 v0.8 – User Experience Upgrade
-- [x] Action Preview: Show where the bot will click before executing
 - [ ] Dry Run Mode (simulate sequence without actions)
 - [ ] Real-time Step Highlighting in the GUI
 - [ ] Undo/Redo for sequence editing
