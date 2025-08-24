@@ -63,6 +63,9 @@ Here’s a "Hello World" style tutorial to get you started:
 
 ## Changelog
 
+### v0.8.3 - (2025-08-24)
+- **Critical Fix**: Refactored the core execution logic for **Loop** steps to prevent an uncontrolled process explosion that would freeze the application. Loops are now managed sequentially on the main execution stack, ensuring stability.
+
 ### v0.8.2 - (2025-08-24)
 - **Bug Fix**: Fixed a critical bug where running a sequence with steps that had no post-action wait time would cause the application to freeze due to an infinite recursive loop.
 

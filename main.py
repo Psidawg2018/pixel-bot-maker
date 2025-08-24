@@ -51,6 +51,7 @@ class App(tk.Tk):
         self.conditional_loop_retry_counts = {}
         self.step_retry_counts = {} # To track retries on a per-step basis
         self.time_condition_executed = set() # To prevent re-triggering
+        self.loop_counters = {} # To track 'repeat x times' loops
         self.hide_window_var = tk.BooleanVar(value=self.settings_manager.get_setting('hide_bot_default'))
         self.dry_run_var = tk.BooleanVar(value=False)
         self.target_window_title = tk.StringVar()
@@ -606,6 +607,7 @@ class App(tk.Tk):
             self.conditional_loop_retry_counts.clear() # Reset all conditional loop counters
             self.step_retry_counts.clear() # Reset step-specific retries
             self.time_condition_executed.clear() # Reset executed time conditions
+            self.loop_counters.clear() # Reset all loop counters
             self.running = True
             self.start_button.config(text="Stop Bot")
             self.start_hotkey_listener()
@@ -845,108 +847,100 @@ class App(tk.Tk):
             self.toggle_bot()
 
     def _execute_loop_step(self, step, context):
+        """
+        Handles the execution of a 'loop' step by managing the execution stack
+        instead of using a blocking internal loop.
+        """
         loop_mode = step.get('loop_mode', 'repeat')
+        step_id = id(step)
 
-        target_window_title = step.get("window_title")
-        if not target_window_title:
-            self.log(f"Error in {context['number_str']} (Loop): No target window specified. Stopping bot.")
-            self.toggle_bot()
-            return
-
-        try:
-            target_windows = gw.getWindowsWithTitle(target_window_title)
-            if not target_windows:
-                self.log(f"{context['number_str']} (Loop): Window '{target_window_title}' not found. Re-scanning...")
-                self.scan_job = self.after(2000, self.run_scan_loop)
-                return
-            target_window = target_windows[0]
-            # Default scan region is the entire window
-            scan_region = {'top': target_window.top, 'left': target_window.left, 'width': target_window.width, 'height': target_window.height}
-
-            # If a specific search region is defined for the step, use it instead
-            if step.get('search_region'):
-                custom_region = step['search_region']
-                # The custom region coords are relative to the window, so we add the window's top-left corner
-                scan_region = {
-                    'top': target_window.top + custom_region['y'],
-                    'left': target_window.left + custom_region['x'],
-                    'width': custom_region['width'],
-                    'height': custom_region['height']
-                }
-                self.log(f"Using custom scan region: {scan_region}")
-
-        except Exception as e:
-            self.log(f"Error getting window details: {e}. Stopping bot.")
-            self.toggle_bot()
-            return
-
+        # --- REPEAT X TIMES mode ---
         if loop_mode == 'repeat':
             repeat_count = step.get('loop_repeat_count', 1)
-            self.log(f"Executing Loop Step {self.current_step_index + 1}: Repeating {repeat_count} times.")
+            # Get current iteration count, default to 0 if not present
+            current_iteration = self.loop_counters.get(step_id, 0)
 
-            for i in range(repeat_count):
-                self.log(f"  Loop iteration {i+1}/{repeat_count}")
-                for action_step in step.get('loop_actions', []):
-                    if not self.running: return # Check if bot was stopped
+            if current_iteration < repeat_count:
+                self.log(f"{context['number_str']} (Loop): Running iteration {current_iteration + 1}/{repeat_count}.")
+                # Increment the counter for the next time we see this step
+                self.loop_counters[step_id] = current_iteration + 1
 
-                    # We pass the same scan_region for all sub-actions
-                    if not self._execute_single_action(action_step, scan_region):
-                        self.log(f"    - Sub-action failed. Stopping bot.")
-                        self.toggle_bot()
-                        return
+                # 1. Push the current loop step back onto the stack. When the sub-actions
+                #    are done, the bot will re-evaluate this same step.
+                self.execution_stack.append((context['sequence'], context['index']))
+                # 2. Push the sub-actions onto the stack to be executed now.
+                self.execution_stack.append((step.get('loop_actions', []), 0))
+            else:
+                # Loop is finished
+                self.log(f"{context['number_str']} (Loop): Finished {repeat_count} iterations.")
+                # Clean up the counter
+                if step_id in self.loop_counters:
+                    del self.loop_counters[step_id]
+                # Advance the parent sequence to the *next* step
+                self.execution_stack[-1] = (context['sequence'], context['index'] + 1)
 
-            self.log("Loop finished.")
-            sequence, index = self.execution_stack[-1]
-            self.execution_stack[-1] = (sequence, index + 1)
-            self._handle_post_action_wait(step)
+            # Immediately schedule the next scan to process the updated stack
+            self.scan_job = self.after(10, self.run_scan_loop)
+            return
 
+        # --- UNTIL CONDITION MET mode ---
         elif loop_mode == 'until':
             max_retries = step.get('max_retries', 10)
-            condition_target = step.get('loop_condition_target')
-            condition_found = False
-            self.log(f"Executing {context['number_str']} (Loop): Looping until '{step.get('loop_condition_target_name')}' is found.")
+            current_retries = self.loop_counters.get(step_id, 0)
 
-            for i in range(max_retries):
-                if not self.running: return
-
-                # 1. Check for the condition
-                self.log(f"  - Condition check attempt {i+1}/{max_retries}...")
-                haystack_img = capture_screen(scan_region)
-                try:
-                    targets = step['loop_condition_target']
-                    if isinstance(targets, str): targets = [targets]
-                    needle_imgs = [cv2.imread(p, cv2.IMREAD_UNCHANGED) for p in targets]
-
-                    threshold = self.settings_manager.get_setting('image_similarity_threshold')
-                    if find_image(haystack_img, [img for img in needle_imgs if img is not None], threshold=threshold):
-                        self.log("  - Condition met. Exiting loop.")
-                        condition_found = True
-                        break
-                except Exception as e:
-                    self.log(f"  - Error loading condition image(s): {e}. Stopping bot.")
-                    self.toggle_bot()
-                    return
-
-                # 2. If condition not met, perform actions
-                self.log(f"  - Condition not met. Performing loop actions...")
-                for action_step in step.get('loop_actions', []):
-                    if not self.running: return
-                    if not self._execute_single_action(action_step, scan_region):
-                        self.log("    - Sub-action failed. Stopping bot.")
-                        self.toggle_bot()
-                        return
-
-                # Small delay before next condition check
-                time.sleep(1)
-
-            if condition_found:
-                self.log("Loop finished successfully.")
-                sequence, index = self.execution_stack[-1]
-                self.execution_stack[-1] = (sequence, index + 1)
-                self._handle_post_action_wait(step)
-            else:
+            if current_retries >= max_retries:
                 self.log(f"Loop failed: Condition not met after {max_retries} retries. Stopping bot.")
                 self.toggle_bot()
+                return
+
+            # Get window and region details first
+            try:
+                target_window_title = step.get("window_title")
+                target_windows = gw.getWindowsWithTitle(target_window_title)
+                if not target_windows:
+                    self.log(f"{context['number_str']} (Loop): Window '{target_window_title}' not found. Re-scanning...")
+                    self.scan_job = self.after(2000, self.run_scan_loop)
+                    return
+                target_window = target_windows[0]
+                scan_region = {'top': target_window.top, 'left': target_window.left, 'width': target_window.width, 'height': target_window.height}
+                if step.get('search_region'):
+                    custom_region = step['search_region']
+                    scan_region = {'top': target_window.top + custom_region['y'], 'left': target_window.left + custom_region['x'], 'width': custom_region['width'], 'height': custom_region['height']}
+            except Exception as e:
+                self.log(f"Error getting window details: {e}. Stopping bot.")
+                self.toggle_bot()
+                return
+
+            # 1. Check for the condition
+            self.log(f"Executing {context['number_str']} (Loop): Checking for condition '{step.get('loop_condition_target_name')}'. Attempt {current_retries + 1}/{max_retries}.")
+            haystack_img = capture_screen(scan_region)
+            condition_found = False
+            try:
+                targets = step['loop_condition_target']
+                if isinstance(targets, str): targets = [targets]
+                needle_imgs = [cv2.imread(p, cv2.IMREAD_UNCHANGED) for p in targets]
+                threshold = self.settings_manager.get_setting('image_similarity_threshold')
+                if find_image(haystack_img, [img for img in needle_imgs if img is not None], threshold=threshold):
+                    condition_found = True
+            except Exception as e:
+                self.log(f"  - Error loading condition image(s): {e}. Stopping bot.")
+                self.toggle_bot()
+                return
+
+            # 2. Decide what to do based on condition
+            if condition_found:
+                self.log("  - Condition met. Exiting loop.")
+                if step_id in self.loop_counters:
+                    del self.loop_counters[step_id]
+                self.execution_stack[-1] = (context['sequence'], context['index'] + 1)
+            else:
+                self.log("  - Condition not met. Performing loop actions.")
+                self.loop_counters[step_id] = current_retries + 1
+                # Push the loop step and then the sub-actions, just like in 'repeat' mode
+                self.execution_stack.append((context['sequence'], context['index']))
+                self.execution_stack.append((step.get('loop_actions', []), 0))
+
+            self.scan_job = self.after(10, self.run_scan_loop)
 
     def _execute_single_action(self, action_step, scan_region):
         """
