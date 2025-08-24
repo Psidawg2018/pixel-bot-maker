@@ -117,11 +117,11 @@ class App(tk.Tk):
         list_container.columnconfigure(0, weight=1)
         list_container.rowconfigure(0, weight=1)
         self.sequence_listbox = tk.Listbox(list_container, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, height=10)
-        self.sequence_listbox.grid(row=0, column=0, sticky="nsew")
+        self.sequence_listbox.pack(fill="both", expand=True) # Use pack here
         self.sequence_listbox.bind("<<ListboxSelect>>", self.on_sequence_select)
 
-        seq_button_frame = ttk.Frame(list_container)
-        seq_button_frame.grid(row=0, column=1, sticky="ns", padx=(5,0))
+        seq_button_frame = ttk.Frame(sequence_frame)
+        seq_button_frame.grid(row=1, column=1, sticky="ns", padx=(5,0))
         self.add_step_button = ttk.Button(seq_button_frame, text="Add", command=self.add_step, state=tk.DISABLED)
         self.add_step_button.pack(pady=2, fill="x")
         self.edit_step_button = ttk.Button(seq_button_frame, text="Edit", command=self.edit_step, state=tk.DISABLED)
