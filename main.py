@@ -50,7 +50,10 @@ class App(tk.Tk):
         self.execution_stack = [] # (sequence, index)
         self.conditional_loop_retry_counts = {}
         self.step_retry_counts = {} # To track retries on a per-step basis
+        self.time_condition_executed = set() # To prevent re-triggering
+        self.loop_counters = {} # To track 'repeat x times' loops
         self.hide_window_var = tk.BooleanVar(value=self.settings_manager.get_setting('hide_bot_default'))
+        self.dry_run_var = tk.BooleanVar(value=False)
         self.target_window_title = tk.StringVar()
         self.target_window_title.set("") # Set to empty string initially
 
@@ -153,6 +156,9 @@ class App(tk.Tk):
 
         self.hide_window_check = ttk.Checkbutton(bot_controls_frame, text="Hide window when bot is running", variable=self.hide_window_var)
         self.hide_window_check.pack()
+
+        self.dry_run_check = ttk.Checkbutton(bot_controls_frame, text="Dry Run (log actions without executing)", variable=self.dry_run_var)
+        self.dry_run_check.pack(pady=5)
 
         self.start_button = ttk.Button(bot_controls_frame, text="Start Bot", command=self.toggle_bot, style="Accent.TButton")
         self.start_button.pack(pady=10)
@@ -600,6 +606,8 @@ class App(tk.Tk):
             self.execution_stack = [(self.action_sequence, 0)]
             self.conditional_loop_retry_counts.clear() # Reset all conditional loop counters
             self.step_retry_counts.clear() # Reset step-specific retries
+            self.time_condition_executed.clear() # Reset executed time conditions
+            self.loop_counters.clear() # Reset all loop counters
             self.running = True
             self.start_button.config(text="Stop Bot")
             self.start_hotkey_listener()
@@ -626,8 +634,9 @@ class App(tk.Tk):
             self.log(f"Waiting for {wait_duration:.2f} seconds...")
             self.scan_job = self.after(wait_ms, self.run_scan_loop)
         else:
-            # If no wait, or wait is 0, proceed to the next step immediately.
-            self.run_scan_loop()
+            # If no wait, or wait is 0, proceed to the next step immediately,
+            # but use after(10) to yield to the main GUI loop and prevent freezing.
+            self.scan_job = self.after(10, self.run_scan_loop)
 
     def _substitute_variables(self, text):
         """
@@ -708,16 +717,23 @@ class App(tk.Tk):
 
         # Handle non-UI actions first
         if action_type == 'Set Variable':
-            var_name = current_step.get('action_params', {}).get('variable_name')
-            var_value = self._substitute_variables(current_step.get('action_params', {}).get('variable_value')) # Allow variables in values
-            if var_name:
-                self.log(f"Setting variable '{var_name}' to '{var_value}'")
-                self.variables[var_name] = var_value
-                self.execution_stack[-1] = (current_sequence, current_index + 1)
-                self._handle_post_action_wait(current_step) # Still respect wait times
-            else:
+            params = current_step.get('action_params', {})
+            var_name = params.get('variable_name')
+            var_value = self._substitute_variables(params.get('variable_value')) # Allow variables in values
+
+            if not var_name:
                 self.log(f"Error in {step_number_str}: 'Set Variable' action has no variable name. Stopping bot.")
                 self.toggle_bot()
+                return
+
+            if self.dry_run_var.get():
+                self.log(f"[DRY RUN] Would set variable '{var_name}' to '{var_value}'")
+            else:
+                self.log(f"Setting variable '{var_name}' to '{var_value}'")
+                self.variables[var_name] = var_value
+
+            self.execution_stack[-1] = (current_sequence, current_index + 1)
+            self._handle_post_action_wait(current_step) # Still respect wait times
             return
         elif action_type == 'Modify Variable':
             params = current_step.get('action_params', {})
@@ -732,31 +748,34 @@ class App(tk.Tk):
 
             current_value_str = self.variables.get(var_name, '0')
 
-            if operation == 'set':
-                self.variables[var_name] = value_str
-                self.log(f"Set variable '{var_name}' to '{value_str}'")
-            else: # add or subtract
-                try:
-                    current_value = float(current_value_str)
-                    value_to_op = float(value_str)
-                    new_value = 0
-                    if operation == 'add':
-                        new_value = current_value + value_to_op
-                    elif operation == 'subtract':
-                        new_value = current_value - value_to_op
+            if self.dry_run_var.get():
+                self.log(f"[DRY RUN] Would {operation} variable '{var_name}' by '{value_str}'")
+            else:
+                if operation == 'set':
+                    self.variables[var_name] = value_str
+                    self.log(f"Set variable '{var_name}' to '{value_str}'")
+                else: # add or subtract
+                    try:
+                        current_value = float(current_value_str)
+                        value_to_op = float(value_str)
+                        new_value = 0
+                        if operation == 'add':
+                            new_value = current_value + value_to_op
+                        elif operation == 'subtract':
+                            new_value = current_value - value_to_op
 
-                    # Store as int if it's a whole number, otherwise float
-                    if new_value == int(new_value):
-                        self.variables[var_name] = str(int(new_value))
-                    else:
-                        self.variables[var_name] = str(new_value)
+                        # Store as int if it's a whole number, otherwise float
+                        if new_value == int(new_value):
+                            self.variables[var_name] = str(int(new_value))
+                        else:
+                            self.variables[var_name] = str(new_value)
 
-                    self.log(f"Variable '{var_name}' {operation}ed by {value_to_op}. New value: {self.variables[var_name]}")
+                        self.log(f"Variable '{var_name}' {operation}ed by {value_to_op}. New value: {self.variables[var_name]}")
 
-                except ValueError:
-                    self.log(f"Error in {step_number_str}: Cannot perform arithmetic on non-numeric variable '{var_name}' (value: '{current_value_str}') or input '{value_str}'. Stopping bot.")
-                    self.toggle_bot()
-                    return
+                    except ValueError:
+                        self.log(f"Error in {step_number_str}: Cannot perform arithmetic on non-numeric variable '{var_name}' (value: '{current_value_str}') or input '{value_str}'. Stopping bot.")
+                        self.toggle_bot()
+                        return
 
             self.execution_stack[-1] = (current_sequence, current_index + 1)
             self._handle_post_action_wait(current_step)
@@ -771,18 +790,24 @@ class App(tk.Tk):
                 self.toggle_bot()
                 return
 
-            self.log(f"Performing OCR on region {region} and saving to '{output_var}'...")
-            screenshot = capture_screen(region)
-            from image_analyzer import extract_text_from_image
-            extracted_text = extract_text_from_image(screenshot)
+            if self.dry_run_var.get():
+                self.log(f"[DRY RUN] Would perform OCR on region {region} and save to '{output_var}'")
+                # In a dry run, we can't know the result, so we'll save a placeholder
+                self.variables[output_var] = "DRY_RUN_OCR_RESULT"
+            else:
+                self.log(f"Performing OCR on region {region} and saving to '{output_var}'...")
+                screenshot = capture_screen(region)
+                from image_analyzer import extract_text_from_image
+                extracted_text = extract_text_from_image(screenshot)
 
-            if extracted_text == "TESSERACT_NOT_FOUND":
-                self.log("FATAL: Tesseract OCR engine not found. Please install it to use the OCR feature. Stopping bot.")
-                self.toggle_bot()
-                return
+                if extracted_text == "TESSERACT_NOT_FOUND":
+                    self.log("FATAL: Tesseract OCR engine not found. Please install it to use the OCR feature. Stopping bot.")
+                    self.toggle_bot()
+                    return
 
-            self.log(f"OCR Result: '{extracted_text}'. Stored in variable '{output_var}'.")
-            self.variables[output_var] = extracted_text
+                self.log(f"OCR Result: '{extracted_text}'. Stored in variable '{output_var}'.")
+                self.variables[output_var] = extracted_text
+
             self.execution_stack[-1] = (current_sequence, current_index + 1)
             self._handle_post_action_wait(current_step)
             return
@@ -822,108 +847,100 @@ class App(tk.Tk):
             self.toggle_bot()
 
     def _execute_loop_step(self, step, context):
+        """
+        Handles the execution of a 'loop' step by managing the execution stack
+        instead of using a blocking internal loop.
+        """
         loop_mode = step.get('loop_mode', 'repeat')
+        step_id = id(step)
 
-        target_window_title = step.get("window_title")
-        if not target_window_title:
-            self.log(f"Error in {context['number_str']} (Loop): No target window specified. Stopping bot.")
-            self.toggle_bot()
-            return
-
-        try:
-            target_windows = gw.getWindowsWithTitle(target_window_title)
-            if not target_windows:
-                self.log(f"{context['number_str']} (Loop): Window '{target_window_title}' not found. Re-scanning...")
-                self.scan_job = self.after(2000, self.run_scan_loop)
-                return
-            target_window = target_windows[0]
-            # Default scan region is the entire window
-            scan_region = {'top': target_window.top, 'left': target_window.left, 'width': target_window.width, 'height': target_window.height}
-
-            # If a specific search region is defined for the step, use it instead
-            if step.get('search_region'):
-                custom_region = step['search_region']
-                # The custom region coords are relative to the window, so we add the window's top-left corner
-                scan_region = {
-                    'top': target_window.top + custom_region['y'],
-                    'left': target_window.left + custom_region['x'],
-                    'width': custom_region['width'],
-                    'height': custom_region['height']
-                }
-                self.log(f"Using custom scan region: {scan_region}")
-
-        except Exception as e:
-            self.log(f"Error getting window details: {e}. Stopping bot.")
-            self.toggle_bot()
-            return
-
+        # --- REPEAT X TIMES mode ---
         if loop_mode == 'repeat':
             repeat_count = step.get('loop_repeat_count', 1)
-            self.log(f"Executing Loop Step {self.current_step_index + 1}: Repeating {repeat_count} times.")
+            # Get current iteration count, default to 0 if not present
+            current_iteration = self.loop_counters.get(step_id, 0)
 
-            for i in range(repeat_count):
-                self.log(f"  Loop iteration {i+1}/{repeat_count}")
-                for action_step in step.get('loop_actions', []):
-                    if not self.running: return # Check if bot was stopped
+            if current_iteration < repeat_count:
+                self.log(f"{context['number_str']} (Loop): Running iteration {current_iteration + 1}/{repeat_count}.")
+                # Increment the counter for the next time we see this step
+                self.loop_counters[step_id] = current_iteration + 1
 
-                    # We pass the same scan_region for all sub-actions
-                    if not self._execute_single_action(action_step, scan_region):
-                        self.log(f"    - Sub-action failed. Stopping bot.")
-                        self.toggle_bot()
-                        return
+                # 1. Push the current loop step back onto the stack. When the sub-actions
+                #    are done, the bot will re-evaluate this same step.
+                self.execution_stack.append((context['sequence'], context['index']))
+                # 2. Push the sub-actions onto the stack to be executed now.
+                self.execution_stack.append((step.get('loop_actions', []), 0))
+            else:
+                # Loop is finished
+                self.log(f"{context['number_str']} (Loop): Finished {repeat_count} iterations.")
+                # Clean up the counter
+                if step_id in self.loop_counters:
+                    del self.loop_counters[step_id]
+                # Advance the parent sequence to the *next* step
+                self.execution_stack[-1] = (context['sequence'], context['index'] + 1)
 
-            self.log("Loop finished.")
-            sequence, index = self.execution_stack[-1]
-            self.execution_stack[-1] = (sequence, index + 1)
-            self._handle_post_action_wait(step)
+            # Immediately schedule the next scan to process the updated stack
+            self.scan_job = self.after(10, self.run_scan_loop)
+            return
 
+        # --- UNTIL CONDITION MET mode ---
         elif loop_mode == 'until':
             max_retries = step.get('max_retries', 10)
-            condition_target = step.get('loop_condition_target')
-            condition_found = False
-            self.log(f"Executing {context['number_str']} (Loop): Looping until '{step.get('loop_condition_target_name')}' is found.")
+            current_retries = self.loop_counters.get(step_id, 0)
 
-            for i in range(max_retries):
-                if not self.running: return
-
-                # 1. Check for the condition
-                self.log(f"  - Condition check attempt {i+1}/{max_retries}...")
-                haystack_img = capture_screen(scan_region)
-                try:
-                    targets = step['loop_condition_target']
-                    if isinstance(targets, str): targets = [targets]
-                    needle_imgs = [cv2.imread(p, cv2.IMREAD_UNCHANGED) for p in targets]
-
-                    threshold = self.settings_manager.get_setting('image_similarity_threshold')
-                    if find_image(haystack_img, [img for img in needle_imgs if img is not None], threshold=threshold):
-                        self.log("  - Condition met. Exiting loop.")
-                        condition_found = True
-                        break
-                except Exception as e:
-                    self.log(f"  - Error loading condition image(s): {e}. Stopping bot.")
-                    self.toggle_bot()
-                    return
-
-                # 2. If condition not met, perform actions
-                self.log(f"  - Condition not met. Performing loop actions...")
-                for action_step in step.get('loop_actions', []):
-                    if not self.running: return
-                    if not self._execute_single_action(action_step, scan_region):
-                        self.log("    - Sub-action failed. Stopping bot.")
-                        self.toggle_bot()
-                        return
-
-                # Small delay before next condition check
-                time.sleep(1)
-
-            if condition_found:
-                self.log("Loop finished successfully.")
-                sequence, index = self.execution_stack[-1]
-                self.execution_stack[-1] = (sequence, index + 1)
-                self._handle_post_action_wait(step)
-            else:
+            if current_retries >= max_retries:
                 self.log(f"Loop failed: Condition not met after {max_retries} retries. Stopping bot.")
                 self.toggle_bot()
+                return
+
+            # Get window and region details first
+            try:
+                target_window_title = step.get("window_title")
+                target_windows = gw.getWindowsWithTitle(target_window_title)
+                if not target_windows:
+                    self.log(f"{context['number_str']} (Loop): Window '{target_window_title}' not found. Re-scanning...")
+                    self.scan_job = self.after(2000, self.run_scan_loop)
+                    return
+                target_window = target_windows[0]
+                scan_region = {'top': target_window.top, 'left': target_window.left, 'width': target_window.width, 'height': target_window.height}
+                if step.get('search_region'):
+                    custom_region = step['search_region']
+                    scan_region = {'top': target_window.top + custom_region['y'], 'left': target_window.left + custom_region['x'], 'width': custom_region['width'], 'height': custom_region['height']}
+            except Exception as e:
+                self.log(f"Error getting window details: {e}. Stopping bot.")
+                self.toggle_bot()
+                return
+
+            # 1. Check for the condition
+            self.log(f"Executing {context['number_str']} (Loop): Checking for condition '{step.get('loop_condition_target_name')}'. Attempt {current_retries + 1}/{max_retries}.")
+            haystack_img = capture_screen(scan_region)
+            condition_found = False
+            try:
+                targets = step['loop_condition_target']
+                if isinstance(targets, str): targets = [targets]
+                needle_imgs = [cv2.imread(p, cv2.IMREAD_UNCHANGED) for p in targets]
+                threshold = self.settings_manager.get_setting('image_similarity_threshold')
+                if find_image(haystack_img, [img for img in needle_imgs if img is not None], threshold=threshold):
+                    condition_found = True
+            except Exception as e:
+                self.log(f"  - Error loading condition image(s): {e}. Stopping bot.")
+                self.toggle_bot()
+                return
+
+            # 2. Decide what to do based on condition
+            if condition_found:
+                self.log("  - Condition met. Exiting loop.")
+                if step_id in self.loop_counters:
+                    del self.loop_counters[step_id]
+                self.execution_stack[-1] = (context['sequence'], context['index'] + 1)
+            else:
+                self.log("  - Condition not met. Performing loop actions.")
+                self.loop_counters[step_id] = current_retries + 1
+                # Push the loop step and then the sub-actions, just like in 'repeat' mode
+                self.execution_stack.append((context['sequence'], context['index']))
+                self.execution_stack.append((step.get('loop_actions', []), 0))
+
+            self.scan_job = self.after(10, self.run_scan_loop)
 
     def _execute_single_action(self, action_step, scan_region):
         """
@@ -969,43 +986,47 @@ class App(tk.Tk):
             # --- Action Preview ---
             preview_duration = 0.5 # in seconds
             action_type = action_step['action_type']
-            # TODO: Make this a setting
-            if action_type in ["Click", "Right-click", "Click with Offset"]:
-                self.log(f"    - Previewing action at ({abs_x}, {abs_y}) for {preview_duration}s...")
-                preview = ActionPreview(self, abs_x, abs_y, duration=int(preview_duration * 1000))
-                self.wait_window(preview)
+            if not self.dry_run_var.get():
+                # TODO: Make this a setting
+                if action_type in ["Click", "Right-click", "Click with Offset"]:
+                    self.log(f"    - Previewing action at ({abs_x}, {abs_y}) for {preview_duration}s...")
+                    preview = ActionPreview(self, abs_x, abs_y, duration=int(preview_duration * 1000))
+                    self.wait_window(preview)
 
 
             action_params = action_step.get('action_params', {})
 
-            if action_type == "Click":
-                self.log(f"    - Performing action: Click at ({abs_x}, {abs_y})")
-                click_at(abs_x, abs_y)
-            elif action_type == "Right-click":
-                self.log(f"    - Performing action: Right-click at ({abs_x}, {abs_y})")
-                right_click_at(abs_x, abs_y)
-            elif action_type == "Click with Offset":
-                offset_x = action_params.get('click_offset_x', 0)
-                offset_y = action_params.get('click_offset_y', 0)
-                click_x = abs_x + offset_x
-                click_y = abs_y + offset_y
-                self.log(f"    - Performing action: Click with offset at ({click_x}, {click_y})")
-                click_at(click_x, click_y)
-            elif action_type == "Type":
-                text_to_type = action_params.get('text', '')
-                substituted_text = self._substitute_variables(text_to_type)
-                self.log(f"    - Performing action: Type '{substituted_text}'")
-                type_text(substituted_text)
-            elif action_type == "Key Combo":
-                key_combo = action_params.get('key_combo', '')
-                substituted_combo = self._substitute_variables(key_combo)
-                self.log(f"    - Performing action: Press keys '{substituted_combo}'")
-                press_key_combination(substituted_combo)
-            elif action_type == "Scroll":
-                direction = action_params.get('scroll_direction', 'Down')
-                amount = action_params.get('scroll_amount', 5)
-                self.log(f"    - Performing action: Scroll {direction} by {amount}")
-                scroll_wheel(direction.lower(), amount)
+            if self.dry_run_var.get():
+                self.log(f"    - [DRY RUN] Would perform action: {action_type}")
+            else:
+                if action_type == "Click":
+                    self.log(f"    - Performing action: Click at ({abs_x}, {abs_y})")
+                    click_at(abs_x, abs_y)
+                elif action_type == "Right-click":
+                    self.log(f"    - Performing action: Right-click at ({abs_x}, {abs_y})")
+                    right_click_at(abs_x, abs_y)
+                elif action_type == "Click with Offset":
+                    offset_x = action_params.get('click_offset_x', 0)
+                    offset_y = action_params.get('click_offset_y', 0)
+                    click_x = abs_x + offset_x
+                    click_y = abs_y + offset_y
+                    self.log(f"    - Performing action: Click with offset at ({click_x}, {click_y})")
+                    click_at(click_x, click_y)
+                elif action_type == "Type":
+                    text_to_type = action_params.get('text', '')
+                    substituted_text = self._substitute_variables(text_to_type)
+                    self.log(f"    - Performing action: Type '{substituted_text}'")
+                    type_text(substituted_text)
+                elif action_type == "Key Combo":
+                    key_combo = action_params.get('key_combo', '')
+                    substituted_combo = self._substitute_variables(key_combo)
+                    self.log(f"    - Performing action: Press keys '{substituted_combo}'")
+                    press_key_combination(substituted_combo)
+                elif action_type == "Scroll":
+                    direction = action_params.get('scroll_direction', 'Down')
+                    amount = action_params.get('scroll_amount', 5)
+                    self.log(f"    - Performing action: Scroll {direction} by {amount}")
+                    scroll_wheel(direction.lower(), amount)
 
             # Sub-actions have waits too
             self._handle_post_action_wait(action_step)
@@ -1175,27 +1196,32 @@ class App(tk.Tk):
             self.log("Fallback action: Doing nothing.")
             return True
         elif action_type == "Click and Drag":
+            if self.dry_run_var.get():
+                self.log("Fallback action: [DRY RUN] Would perform 'Click and Drag'.")
+            else:
+                self.log("Fallback action: Performing 'Click and Drag'.")
+                params = action_details.get('action_params', {})
+                offset_x = params.get('drag_offset_x', 0)
+                offset_y = params.get('drag_offset_y', 0)
 
-            self.log("Fallback action: Performing 'Click and Drag'.")
-            params = action_details.get('action_params', {})
-            offset_x = params.get('drag_offset_x', 0)
-            offset_y = params.get('drag_offset_y', 0)
+                start_x = scan_region['left'] + scan_region['width'] // 2
+                start_y = scan_region['top'] + scan_region['height'] // 2
+                end_x = start_x + offset_x
+                end_y = start_y + offset_y
 
-            start_x = scan_region['left'] + scan_region['width'] // 2
-            start_y = scan_region['top'] + scan_region['height'] // 2
-            end_x = start_x + offset_x
-            end_y = start_y + offset_y
-
-            self.log(f"Dragging from window center ({start_x}, {start_y}) to ({end_x}, {end_y})")
-            click_and_drag(start_x, start_y, end_x, end_y)
+                self.log(f"Dragging from window center ({start_x}, {start_y}) to ({end_x}, {end_y})")
+                click_and_drag(start_x, start_y, end_x, end_y)
             return True
 
         elif action_type == "Scroll":
-            params = action_details.get('action_params', {})
-            direction = params.get('scroll_direction', 'Down')
-            amount = params.get('scroll_amount', 5)
-            self.log(f"Fallback action: Scrolling {direction} by {amount}")
-            scroll_wheel(direction.lower(), amount)
+            if self.dry_run_var.get():
+                self.log("Fallback action: [DRY RUN] Would scroll.")
+            else:
+                params = action_details.get('action_params', {})
+                direction = params.get('scroll_direction', 'Down')
+                amount = params.get('scroll_amount', 5)
+                self.log(f"Fallback action: Scrolling {direction} by {amount}")
+                scroll_wheel(direction.lower(), amount)
             return True
         elif action_type == "Click" or action_type == "Click with Offset":
             self.log(f"Fallback: Finding '{action_details.get('detection_target_name')}' for action '{action_type}'.")
@@ -1215,17 +1241,20 @@ class App(tk.Tk):
                 abs_x = scan_region['left'] + target_pos[0]
                 abs_y = scan_region['top'] + target_pos[1]
 
-                if action_type == "Click":
-                    self.log(f"Fallback action: Clicking at ({abs_x}, {abs_y})")
-                    click_at(abs_x, abs_y)
-                else: # Click with Offset
-                    params = action_details.get('action_params', {})
-                    offset_x = params.get('click_offset_x', 0)
-                    offset_y = params.get('click_offset_y', 0)
-                    click_x = abs_x + offset_x
-                    click_y = abs_y + offset_y
-                    self.log(f"Fallback action: Click with offset at ({click_x}, {click_y})")
-                    click_at(click_x, click_y)
+                if self.dry_run_var.get():
+                    self.log(f"Fallback action: [DRY RUN] Would perform '{action_type}' at ({abs_x}, {abs_y})")
+                else:
+                    if action_type == "Click":
+                        self.log(f"Fallback action: Clicking at ({abs_x}, {abs_y})")
+                        click_at(abs_x, abs_y)
+                    else: # Click with Offset
+                        params = action_details.get('action_params', {})
+                        offset_x = params.get('click_offset_x', 0)
+                        offset_y = params.get('click_offset_y', 0)
+                        click_x = abs_x + offset_x
+                        click_y = abs_y + offset_y
+                        self.log(f"Fallback action: Click with offset at ({click_x}, {click_y})")
+                        click_at(click_x, click_y)
                 return True
             else:
                 self.log("Fallback target not found.")
@@ -1245,14 +1274,25 @@ class App(tk.Tk):
             return
 
         now = time.localtime()
-        self.log(f"DEBUG: Checking time. Target: {hour} (type: {type(hour)}), {minute} (type: {type(minute)}). Current: {now.tm_hour} (type: {type(now.tm_hour)}), {now.tm_min} (type: {type(now.tm_min)})")
+        time_key = (hour, minute)
+
         if now.tm_hour == hour and now.tm_min == minute:
+            if time_key in self.time_condition_executed:
+                self.log(f"Time condition {hour:02d}:{minute:02d} already executed this cycle. Advancing.")
+                # Condition was met and executed, so we just advance the parent sequence
+                self.execution_stack[-1] = (context['sequence'], context['index'] + 1)
+                self.scan_job = self.after(10, self.run_scan_loop)
+                return
+
             self.log(f"Time condition met: {hour:02d}:{minute:02d}. Executing actions.")
+            self.time_condition_executed.add(time_key) # Mark as executed
+
             # Advance the parent sequence *before* pushing a new one.
             self.execution_stack[-1] = (context['sequence'], context['index'] + 1)
             actions = step.get('actions', [])
             if actions:
                 self.execution_stack.append((actions, 0))
+            # After executing, immediately continue to the next step in the main loop
             self.scan_job = self.after(10, self.run_scan_loop)
         else:
             self.log(f"Waiting for time condition: {hour:02d}:{minute:02d}. Current time: {now.tm_hour:02d}:{now.tm_min:02d}. Re-checking in 5 seconds.")
