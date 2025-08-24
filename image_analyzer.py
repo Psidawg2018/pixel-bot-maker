@@ -31,14 +31,32 @@ def extract_text_from_image(image):
     """
     Uses pytesseract to extract text from a given image.
     The image is expected to be a NumPy array (from OpenCV).
+    This function includes preprocessing steps to improve OCR accuracy.
     Returns the extracted text as a string, or an error code.
     """
     try:
-        # Pytesseract works best with PIL Images. Convert from OpenCV format (BGR) to RGB.
-        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        pil_image = Image.fromarray(rgb_image)
+        # 1. Convert to Grayscale
+        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        # Perform OCR
+        # 2. Apply a slight blur to remove noise
+        # A 3x3 kernel is usually a good starting point.
+        blurred_image = cv2.GaussianBlur(gray_image, (3, 3), 0)
+
+        # 3. Apply adaptive thresholding to binarize the image
+        # This helps with varying lighting conditions.
+        binary_image = cv2.adaptiveThreshold(
+            blurred_image,
+            255, # Max value to assign
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            11, # Block size (needs to be an odd number)
+            2   # Constant subtracted from the mean
+        )
+
+        # Pytesseract works best with PIL Images.
+        pil_image = Image.fromarray(binary_image)
+
+        # 4. Perform OCR
         text = pytesseract.image_to_string(pil_image)
         return text.strip()
     except pytesseract.TesseractNotFoundError:

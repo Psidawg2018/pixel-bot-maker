@@ -48,7 +48,7 @@ class App(tk.Tk):
         self.action_sequence = []
         self.variables = {} # For the new variable system
         self.execution_stack = [] # (sequence, index)
-        self.current_retry_count = 0
+        self.conditional_loop_retry_counts = {}
         self.step_retry_counts = {} # To track retries on a per-step basis
         self.hide_window_var = tk.BooleanVar(value=self.settings_manager.get_setting('hide_bot_default'))
         self.target_window_title = tk.StringVar()
@@ -117,11 +117,11 @@ class App(tk.Tk):
         list_container.columnconfigure(0, weight=1)
         list_container.rowconfigure(0, weight=1)
         self.sequence_listbox = tk.Listbox(list_container, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, height=10)
-        self.sequence_listbox.grid(row=0, column=0, sticky="nsew")
+        self.sequence_listbox.pack(fill="both", expand=True) # Use pack here
         self.sequence_listbox.bind("<<ListboxSelect>>", self.on_sequence_select)
 
-        seq_button_frame = ttk.Frame(list_container)
-        seq_button_frame.grid(row=0, column=1, sticky="ns", padx=(5,0))
+        seq_button_frame = ttk.Frame(sequence_frame)
+        seq_button_frame.grid(row=1, column=1, sticky="ns", padx=(5,0))
         self.add_step_button = ttk.Button(seq_button_frame, text="Add", command=self.add_step, state=tk.DISABLED)
         self.add_step_button.pack(pady=2, fill="x")
         self.edit_step_button = ttk.Button(seq_button_frame, text="Edit", command=self.edit_step, state=tk.DISABLED)
@@ -544,7 +544,7 @@ class App(tk.Tk):
                 return
             self.variables.clear()
             self.execution_stack = [(self.action_sequence, 0)]
-            self.current_retry_count = 0 # Legacy, for conditional loops
+            self.conditional_loop_retry_counts.clear() # Reset all conditional loop counters
             self.step_retry_counts.clear() # Reset step-specific retries
             self.running = True
             self.start_button.config(text="Stop Bot")
@@ -1020,7 +1020,10 @@ class App(tk.Tk):
 
     def _execute_conditional_loop_step(self, step, context):
         max_retries = step.get('max_retries', 5)
-        if self.current_retry_count >= max_retries:
+        step_id = id(step)
+        current_retries = self.conditional_loop_retry_counts.get(step_id, 0)
+
+        if current_retries >= max_retries:
             self.log(f"Loop failed after {max_retries} retries for {context['number_str']}. Stopping bot.")
             self.toggle_bot()
             return
@@ -1061,7 +1064,7 @@ class App(tk.Tk):
 
         # 1. Look for the primary target
         primary_target = step.get('primary_target', {})
-        self.log(f"{context['number_str']} (Attempt {self.current_retry_count+1}/{max_retries}): Finding '{primary_target.get('detection_target_name')}'...")
+        self.log(f"{context['number_str']} (Attempt {current_retries+1}/{max_retries}): Finding '{primary_target.get('detection_target_name')}'...")
         haystack_img = capture_screen(scan_region)
 
         primary_pos = None
@@ -1079,14 +1082,14 @@ class App(tk.Tk):
         if primary_pos:
             # 2. If found, success! Move to next step.
             self.log("Primary target found! Proceeding to next step.")
-            self.current_retry_count = 0
+            self.conditional_loop_retry_counts[step_id] = 0 # Reset counter for this specific step
             sequence, index = self.execution_stack[-1]
             self.execution_stack[-1] = (sequence, index + 1)
             self._handle_post_action_wait(step)
         else:
             # 3. If not found, perform fallback action.
             self.log("Primary target not found. Performing fallback action.")
-            self.current_retry_count += 1
+            self.conditional_loop_retry_counts[step_id] = current_retries + 1 # Increment counter
 
             fallback_action = step.get('on_fail', {})
             if not fallback_action:
@@ -2456,7 +2459,9 @@ class StepEditor(tk.Toplevel):
         self.app.log(f"Step editor window target set to: {title}")
 
     def sample_color(self):
-        ColorSampler(self)
+        sampler = ColorSampler(self)
+        self.wait_window(sampler)
+        self.grab_set() # Re-grab focus
 
     def on_color_sampled(self, bgr_color):
         self.target_color_bgr = bgr_color
@@ -2465,7 +2470,9 @@ class StepEditor(tk.Toplevel):
         self.app.log(f"Step color changed to {hex_color}")
 
     def take_screenshot(self):
-        ScreenshotTaker(self)
+        taker = ScreenshotTaker(self)
+        self.wait_window(taker)
+        self.grab_set() # Re-grab focus
 
     def on_screenshot_taken(self, image):
         self.app.log("Screenshot captured for step.")
@@ -2496,7 +2503,9 @@ class StepEditor(tk.Toplevel):
 
     def set_search_region(self):
         self.app.log("Opening region selector...")
-        RegionSelector(self, self.on_region_selected)
+        selector = RegionSelector(self, self.on_region_selected)
+        self.wait_window(selector)
+        self.grab_set()
 
     def on_region_selected(self, region):
         # The region coordinates are relative to the screen. We need to make them
@@ -2576,7 +2585,9 @@ class StepEditor(tk.Toplevel):
 
     def set_ocr_region(self):
         self.app.log("Opening region selector for OCR...")
-        RegionSelector(self, self.on_ocr_region_selected)
+        selector = RegionSelector(self, self.on_ocr_region_selected)
+        self.wait_window(selector)
+        self.grab_set()
 
     def on_ocr_region_selected(self, region):
         self.ocr_region = region
