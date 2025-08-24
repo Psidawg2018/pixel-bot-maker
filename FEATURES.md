@@ -88,12 +88,4 @@ You can store and reuse text using variables.
 -   **Themes:** Choose between a light or dark theme in the Settings tab.
 -   **Hotkeys:** Customize the global hotkey used to start and stop the bot.
 -   **Post-Action Wait:** For any step, you can configure a wait time (either fixed or random) that occurs *after* the step's action is completed successfully. This is useful for making the bot's actions appear more human-like.
-
-### User Experience
-
--   **Action Preview:** Before executing an action, the bot can show you where it's going to click, so you can be sure it's targeting the right element.
--   **Dry Run Mode:** You can simulate an entire sequence without any actions actually being performed. This is useful for debugging and making sure your logic is correct.
--   **Real-time Step Highlighting:** As the bot runs, the current step is highlighted in the GUI, so you can follow along with what it's doing.
--   **Undo/Redo:** You can undo and redo changes to your sequence, making it easier to experiment and recover from mistakes.
--   **Action Templates:** You can save and load common sequences, such as login loops or farming cycles, to reuse in other bots.
--   **Emergency Stop Options:** You can configure emergency stop options, such as detecting if the mouse is moved to a corner of the screen, or if the mouse is shaken, to quickly stop the bot if it's not behaving as expected.
+-   **Action Preview:** For click-based actions, the bot will briefly display a red square at the target location before performing the click. This gives you a visual confirmation of the bot's target, helping to debug and build confidence in your automation sequence.

@@ -117,7 +117,7 @@ class App(tk.Tk):
         list_container.columnconfigure(0, weight=1)
         list_container.rowconfigure(0, weight=1)
         self.sequence_listbox = tk.Listbox(list_container, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, height=10)
-        self.sequence_listbox.pack(fill="both", expand=True) # Use pack here
+        self.sequence_listbox.pack(fill="both", expand=True)
         self.sequence_listbox.bind("<<ListboxSelect>>", self.on_sequence_select)
 
         seq_button_frame = ttk.Frame(sequence_frame)
@@ -912,7 +912,16 @@ class App(tk.Tk):
             abs_x = scan_region['left'] + target_pos[0]
             abs_y = scan_region['top'] + target_pos[1]
 
+            # --- Action Preview ---
+            preview_duration = 1.0 # in seconds
             action_type = action_step['action_type']
+            if action_type in ["Click", "Right-click", "Click with Offset"]:
+                self.log(f"    - Previewing action at ({abs_x}, {abs_y}) for {preview_duration}s...")
+                preview = ActionPreview(self, abs_x, abs_y, duration=int(preview_duration * 1000))
+                self.update_idletasks()
+                time.sleep(preview_duration)
+
+
             action_params = action_step.get('action_params', {})
 
             if action_type == "Click":
@@ -2594,6 +2603,19 @@ class StepEditor(tk.Toplevel):
         self.ocr_region_label_var.set(self._get_ocr_region_display_text())
         self.app.log("OCR region set.")
 
+
+class ActionPreview(tk.Toplevel):
+    def __init__(self, master, x, y, size=30, duration=1000):
+        super().__init__(master)
+        self.geometry(f"{size}x{size}+{x - size // 2}+{y - size // 2}")
+        self.attributes('-alpha', 0.6)
+        self.attributes('-topmost', True)
+        self.overrideredirect(True) # No title bar or borders
+
+        canvas = tk.Canvas(self, bg='red', highlightthickness=0)
+        canvas.pack(fill="both", expand=True)
+
+        self.after(duration, self.destroy)
 
 class HotkeyChangeDialog(tk.Toplevel):
     def __init__(self, master):
