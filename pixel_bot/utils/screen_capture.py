@@ -2,8 +2,6 @@ import mss
 import numpy as np
 import cv2
 import time
-import subprocess
-import os
 
 def _translate_region_keys(region):
     """Translates a region dictionary from using 'x', 'y' to 'left', 'top'."""
@@ -13,31 +11,52 @@ def _translate_region_keys(region):
         region['top'] = region.pop('y')
     return region
 
-def capture_screen(region=None):
-    """
-    Captures a region of the screen.
+class ScreenCapturer:
+    def __init__(self):
+        self.sct = mss.mss()
+        self.last_capture_time = 0
+        self.last_region = None
+        self.last_screenshot = None
 
-    :param region: A dictionary {'top': Y, 'left': X, 'width': W, 'height': H}
-    :return: An OpenCV-compatible image (NumPy array)
-    """
-    with mss.mss() as sct:
+    def capture(self, region=None):
+        """
+        Captures a region of the screen, with caching to avoid redundant captures.
+        """
+        current_time = time.time()
+
+        # Check cache conditions
+        if (self.last_screenshot is not None and
+            region == self.last_region and
+            current_time - self.last_capture_time < 0.1): # 100ms cache
+            return self.last_screenshot
+
+        # --- Perform new capture ---
         monitor = region
         if region is None:
-            # If no region, grab the entire primary screen
-            monitor = sct.monitors[1]
+            monitor = self.sct.monitors[1]
         else:
             monitor = _translate_region_keys(monitor)
 
-        # Grab the data
-        sct_img = sct.grab(monitor)
-
-        # Convert to a NumPy array
+        sct_img = self.sct.grab(monitor)
         img = np.array(sct_img)
-
-        # Convert from BGRA to BGR
         img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
+        # Update cache
+        self.last_screenshot = img
+        self.last_region = region
+        self.last_capture_time = current_time
+
         return img
+
+# Create a single, global instance of the capturer
+_screen_capturer_instance = ScreenCapturer()
+
+def capture_screen(region=None):
+    """
+    Public function to capture the screen. Uses the singleton ScreenCapturer instance.
+    """
+    return _screen_capturer_instance.capture(region)
+
 
 if __name__ == '__main__':
     print("Running screen capture tests...")
