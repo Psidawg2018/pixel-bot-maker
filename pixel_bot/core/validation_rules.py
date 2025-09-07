@@ -8,7 +8,7 @@ before it is used.
 """
 import os
 import re
-from .script_validator import ValidationResult
+from .validation_result import ValidationResult
 
 def validate_required_fields(step):
     """Checks for the presence of essential fields in a step."""
