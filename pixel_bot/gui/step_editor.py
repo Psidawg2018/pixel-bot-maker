@@ -1,7 +1,8 @@
 import logging
 import os
+import time
 import tkinter as tk
-from tkinter import filedialog, ttk
+from tkinter import filedialog, messagebox, ttk
 
 import cv2
 
@@ -553,7 +554,7 @@ class StepEditor(tk.Toplevel):
         index = selection[0]
         branch_list.pop(index)
         update_callback()
-        self.app.log(f"Removed sub-action {index+1}.")
+        logging.info(f"Removed sub-action {index+1}.")
 
     def on_if_action_select(self, event):
         self._update_button_state(self.if_listbox.curselection(), self.if_edit_button, self.if_remove_button)
@@ -592,7 +593,7 @@ class StepEditor(tk.Toplevel):
         self._open_sub_editor(self.time_based_actions, self._update_time_based_actions_listbox, self.time_based_actions_listbox.curselection())
 
     def _remove_time_based_action(self):
-        self._remove_action_from_branch(self.time_based_actions, self.time_based_actions_listbox.curselection(), self._update_time_based_actions_listbox)
+        self._remove_action_from_branch(self.time_based_actions, self._update_time_based_actions_listbox)
 
     def _update_time_based_actions_listbox(self):
         self._update_branch_listbox(self.time_based_actions_listbox, self.time_based_actions)
@@ -632,7 +633,7 @@ class StepEditor(tk.Toplevel):
         index = selected_indices[0]
         self.loop_actions.pop(index)
         self._update_loop_actions_listbox()
-        self.app.log(f"Removed sub-action {index+1}.")
+        logging.info(f"Removed sub-action {index+1}.")
 
     def on_loop_action_select(self, event):
         selected_indices = self.loop_actions_listbox.curselection()
@@ -843,7 +844,7 @@ class StepEditor(tk.Toplevel):
                 try:
                     step['on_failure']['retries'] = int(self.on_failure_retries.get())
                 except ValueError:
-                    logging.error("Error: 'On Failure' retries must be an integer.")
+                    messagebox.showerror("Invalid Input", "'On Failure' retries must be an integer.")
                     return
 
             action_type = step['action_type']
@@ -862,21 +863,21 @@ class StepEditor(tk.Toplevel):
                 step['action_params']['output_variable_name'] = self.output_variable_name.get()
                 step['action_params']['ocr_region'] = self.ocr_region
                 if not self.ocr_region:
-                    logging.error("Error: OCR region is not set for this step.")
+                    messagebox.showerror("Invalid Input", "OCR region is not set for this step.")
                     return
             elif action_type == 'Click with Offset':
                 try:
                     step['action_params']['click_offset_x'] = int(self.simple_click_offset_x.get())
                     step['action_params']['click_offset_y'] = int(self.simple_click_offset_y.get())
                 except ValueError:
-                    logging.error("Error: Click offsets must be integers.")
+                    messagebox.showerror("Invalid Input", "Click offsets must be integers.")
                     return
             elif action_type == 'Scroll':
                 try:
                     step['action_params']['scroll_direction'] = self.scroll_direction.get()
                     step['action_params']['scroll_amount'] = int(self.scroll_amount.get())
                 except ValueError:
-                    logging.error("Error: Scroll amount must be an integer.")
+                    messagebox.showerror("Invalid Input", "Scroll amount must be an integer.")
                     return
 
             if step['detection_mode'] == 'Color':
@@ -885,7 +886,7 @@ class StepEditor(tk.Toplevel):
             else: # Image
                 target_names = list(self.image_listbox.get(0, tk.END))
                 if not target_names:
-                    logging.error("Error: No template images selected for this step.")
+                    messagebox.showerror("Invalid Input", "No template images selected for this step.")
                     return
                 # Save the list of full paths for later execution
                 step['detection_target'] = [os.path.join("templates", name) for name in target_names]
@@ -896,7 +897,7 @@ class StepEditor(tk.Toplevel):
             try:
                 repeat_count = int(self.loop_repeat_count.get())
             except ValueError:
-                logging.error("Error: Repetitions must be an integer.")
+                messagebox.showerror("Invalid Input", "Repetitions must be an integer.")
                 return
 
             step = {
@@ -912,12 +913,12 @@ class StepEditor(tk.Toplevel):
                 try:
                     max_retries = int(self.loop_max_retries.get())
                 except ValueError:
-                    logging.error("Error: Max retries must be an integer.")
+                    messagebox.showerror("Invalid Input", "Max retries must be an integer.")
                     return
 
                 condition_target_names = list(self.until_image_listbox.get(0, tk.END))
                 if not condition_target_names:
-                    logging.error("Error: At least one condition target image must be selected for an 'until' loop.")
+                    messagebox.showerror("Invalid Input", "At least one condition target image must be selected for an 'until' loop.")
                     return
 
                 step['loop_condition_target'] = [os.path.join("templates", name) for name in condition_target_names]
@@ -944,7 +945,7 @@ class StepEditor(tk.Toplevel):
                 if not (0 <= hour <= 23 and 0 <= minute <= 59):
                     raise ValueError("Hour must be between 0-23 and minute between 0-59.")
             except ValueError as e:
-                logging.error(f"Error: Invalid time condition. {e}")
+                messagebox.showerror("Invalid Input", f"Invalid time condition. {e}")
                 return
 
             step = {
@@ -957,13 +958,13 @@ class StepEditor(tk.Toplevel):
             try:
                 max_retries = int(self.max_retries.get())
             except ValueError:
-                logging.error("Error: Max retries must be an integer.")
+                messagebox.showerror("Invalid Input", "Max retries must be an integer.")
                 return
 
             # Primary Target
             primary_target_names = list(self.primary_image_listbox.get(0, tk.END))
             if not primary_target_names:
-                logging.error("Error: At least one primary target image must be selected.")
+                messagebox.showerror("Invalid Input", "At least one primary target image must be selected.")
                 return
 
             primary_target_dict = {
@@ -979,7 +980,7 @@ class StepEditor(tk.Toplevel):
             if fallback_action_type in ["Click", "Click with Offset"]:
                 fallback_target_names = list(self.fallback_image_listbox.get(0, tk.END))
                 if not fallback_target_names:
-                    logging.error(f"Error: At least one fallback target image must be selected for a '{fallback_action_type}' action.")
+                    messagebox.showerror("Invalid Input", f"At least one fallback target image must be selected for a '{fallback_action_type}' action.")
                     return
                 on_fail_dict["detection_mode"] = "Image"
                 on_fail_dict["detection_target"] = [os.path.join("templates", name) for name in fallback_target_names]
@@ -990,14 +991,14 @@ class StepEditor(tk.Toplevel):
                     on_fail_dict['action_params']['click_offset_x'] = int(self.fallback_drag_offset_x.get())
                     on_fail_dict['action_params']['click_offset_y'] = int(self.fallback_drag_offset_y.get())
                 except ValueError:
-                    logging.error("Error: Fallback click offsets must be integers.")
+                    messagebox.showerror("Invalid Input", "Fallback click offsets must be integers.")
                     return
             elif fallback_action_type == "Click and Drag":
                 try:
                     on_fail_dict['action_params']['drag_offset_x'] = int(self.fallback_drag_offset_x.get())
                     on_fail_dict['action_params']['drag_offset_y'] = int(self.fallback_drag_offset_y.get())
                 except ValueError:
-                    logging.error("Error: Fallback drag offsets must be integers.")
+                    messagebox.showerror("Invalid Input", "Fallback drag offsets must be integers.")
                     return
 
             step = {
@@ -1019,10 +1020,10 @@ class StepEditor(tk.Toplevel):
                 wait_params['min_time'] = float(self.min_wait.get())
                 wait_params['max_time'] = float(self.max_wait.get())
                 if wait_params['min_time'] >= wait_params['max_time']:
-                    logging.error("Error: Min wait time must be less than max wait time.")
+                    messagebox.showerror("Invalid Input", "Min wait time must be less than max wait time.")
                     return
         except ValueError:
-            logging.error("Error: Wait times must be valid numbers.")
+            messagebox.showerror("Invalid Input", "Wait times must be valid numbers.")
             return
         step['wait_params'] = wait_params
 
