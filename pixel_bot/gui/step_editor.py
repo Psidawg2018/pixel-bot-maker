@@ -954,10 +954,6 @@ class StepEditor(tk.Toplevel):
                 messagebox.showerror("Invalid Input", "Variable name for condition cannot be empty.")
                 return
 
-            # Ensure the variable is wrapped in {{...}} for substitution
-            if not variable_name.startswith("{{") and not variable_name.endswith("}}"):
-                variable_name = f"{{{{{variable_name}}}}}"
-
             step = {
                 "step_type": "conditional_branch",
                 "condition": {
@@ -1127,6 +1123,10 @@ class StepEditor(tk.Toplevel):
 
             except Exception as e:
                 logging.error(f"Error saving template: {e}")
+
+        # Force focus back to this window after the dialogs
+        self.focus_set()
+        self.grab_set()
 
     def _get_region_display_text(self):
         region = self.search_region
