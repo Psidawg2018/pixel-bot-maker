@@ -1,0 +1,23 @@
+[
+    {
+        "step_type": "conditional_loop",
+        "window_title": "CHANGE_ME",
+        "max_retries": 10,
+        "primary_target": {
+            "detection_mode": "Image",
+            "detection_target": ["templates/placeholder.png"],
+            "detection_target_name": "enemy_to_attack.png"
+        },
+        "on_fail": {
+            "action_type": "Click",
+            "detection_mode": "Image",
+            "detection_target": ["templates/placeholder.png"],
+            "detection_target_name": "find_new_enemy_button.png"
+        },
+        "search_region": null,
+        "wait_params": {
+            "type": "Fixed",
+            "fixed_time": 2.0
+        }
+    }
+]

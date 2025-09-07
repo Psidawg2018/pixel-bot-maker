@@ -4,11 +4,13 @@ import os
 import time
 import tkinter as tk
 from tkinter import filedialog, scrolledtext, ttk
+import copy
 
 from pynput import keyboard
 
 from ..core.execution_engine import ExecutionEngine
 from ..core.variable_manager import VariableManager
+from ..core.template_manager import TemplateManager
 from ..utils.logger import setup_logging
 from ..utils.settings_manager import SettingsManager
 from .dialogs import HotkeyChangeDialog
@@ -87,10 +89,13 @@ class App(tk.Tk):
         # --- Core Logic ---
         self.variable_manager = VariableManager(self.variables, logging.info)
         self.execution_engine = ExecutionEngine(self)
+        self.template_manager = TemplateManager()
+        self.template_manager.load_templates()
+
 
         # Ensure templates directory exists
-        if not os.path.exists("templates"):
-            os.makedirs("templates")
+        if not os.path.exists("pixel_bot/templates"):
+            os.makedirs("pixel_bot/templates")
 
         # --- WIDGET CREATION (Left Panel) ---
         self.style = ttk.Style()
@@ -102,13 +107,20 @@ class App(tk.Tk):
         notebook.pack(expand=True, fill='both')
 
         main_tab = ttk.Frame(notebook, padding="10")
+        templates_tab = ttk.Frame(notebook, padding="10")
         settings_tab = ttk.Frame(notebook, padding="10")
+
         notebook.add(main_tab, text='Main')
+        notebook.add(templates_tab, text='Templates')
         notebook.add(settings_tab, text='Settings')
+
 
         # --- Main Tab Content ---
         main_tab.columnconfigure(0, weight=1)
         main_tab.rowconfigure(0, weight=1) # Make the sequence frame expandable
+
+        # --- Templates Tab Content ---
+        self.setup_templates_tab(templates_tab)
 
         # --- Sequence Editor UI ---
         sequence_frame = ttk.LabelFrame(main_tab, text="Action Sequence", padding="10")
@@ -405,54 +417,7 @@ class App(tk.Tk):
     def update_sequence_listbox(self):
         self.sequence_listbox.delete(0, tk.END)
         for i, step in enumerate(self.action_sequence):
-            step_type = step.get('step_type', 'simple')
-            action_type = step.get('action_type') # Get action_type for simple steps
-            text = f"{i+1}: "
-
-            if step_type == 'simple':
-                if action_type == 'Set Variable':
-                    params = step.get('action_params', {})
-                    text += f"Set Var: '{params.get('variable_name', 'N/A')}' = '{params.get('variable_value', 'N/A')}'"
-                elif action_type == 'Modify Variable':
-                    params = step.get('action_params', {})
-                    text += f"Modify Var: '{params.get('modify_variable_name', 'N/A')}' {params.get('modify_variable_operation', '?')} {params.get('modify_variable_value', '?')}"
-                elif action_type == 'OCR':
-                    params = step.get('action_params', {})
-                    text += f"OCR to Var: '{params.get('output_variable_name', 'N/A')}'"
-                else:
-                    mode = step.get('detection_mode', '?')
-                    action = step.get('action_type', '?')
-                    target = step.get('detection_target_name', 'Unknown')
-                    text += f"Find {mode} '{target}', then {action}"
-            elif step_type == 'conditional_loop':
-                primary_target_name = step.get('primary_target', {}).get('detection_target_name', 'N/A')
-                fallback_action = step.get('on_fail', {}).get('action_type', 'N/A')
-                retries = step.get('max_retries', 'N/A')
-                text += f"CONDITIONAL ({retries}x): Find '{primary_target_name}', on fail: {fallback_action}"
-            elif step_type == 'loop':
-                loop_mode = step.get('loop_mode', 'repeat')
-                if loop_mode == 'repeat':
-                    repeat_count = step.get('loop_repeat_count', 'N/A')
-                    text += f"LOOP: Repeat {repeat_count} times"
-                else:
-                    text += f"LOOP: Until condition"
-            elif step_type == 'time_based_condition':
-                time_cond = step.get('time_condition', {})
-                hour = time_cond.get('hour', '??')
-                minute = time_cond.get('minute', '??')
-                text += f"TIME CONDITION: at {hour:02d}:{minute:02d}"
-            elif step_type == 'wait':
-                duration = step.get('duration', 0)
-                text += f"Wait for {duration:.2f} seconds"
-            elif step_type == 'conditional_branch':
-                condition = step.get('condition', {})
-                var = condition.get('variable', '?').replace('{', '').replace('}', '')
-                op = condition.get('operator', '?')
-                val = condition.get('value', '?')
-                text += f"IF {var} {op} {val}"
-            else:
-                text += "Unknown Step Type"
-
+            text = self.format_step_for_display(i + 1, step)
             self.sequence_listbox.insert(tk.END, text)
         self.on_sequence_select(None)
 
@@ -661,3 +626,162 @@ class App(tk.Tk):
     def _bgr_to_hex(self, bgr_color):
         b, g, r = bgr_color
         return f"#{r:02x}{g:02x}{b:02x}".upper()
+
+    def setup_templates_tab(self, parent_frame):
+        parent_frame.columnconfigure(0, weight=1)
+        parent_frame.rowconfigure(0, weight=1)
+
+        # --- Treeview for categories and templates ---
+        gallery_frame = ttk.LabelFrame(parent_frame, text="Template Gallery", padding="10")
+        gallery_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
+        gallery_frame.columnconfigure(0, weight=1)
+        gallery_frame.rowconfigure(0, weight=1)
+
+        self.template_tree = ttk.Treeview(gallery_frame, show="tree headings", selectmode="browse")
+        self.template_tree.heading("#0", text="Name", anchor='w')
+        self.template_tree.grid(row=0, column=0, sticky="nsew")
+        self.template_tree.bind("<<TreeviewSelect>>", self.on_template_selected)
+
+        # --- Preview Panel ---
+        preview_frame = ttk.LabelFrame(parent_frame, text="Template Preview", padding="10")
+        preview_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+        preview_frame.columnconfigure(0, weight=1)
+        preview_frame.rowconfigure(0, weight=1)
+
+        self.template_preview_text = scrolledtext.ScrolledText(preview_frame, height=8, wrap=tk.WORD, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT)
+        self.template_preview_text.grid(row=0, column=0, sticky="nsew")
+        self.template_preview_text.config(state=tk.DISABLED)
+
+        # --- Controls ---
+        template_controls_frame = ttk.Frame(parent_frame)
+        template_controls_frame.grid(row=2, column=0, sticky="ew")
+
+        self.insert_template_button = ttk.Button(template_controls_frame, text="Insert Template into Sequence", command=self.insert_selected_template, state=tk.DISABLED)
+        self.insert_template_button.pack(pady=5)
+
+        self.populate_template_treeview()
+
+    def populate_template_treeview(self):
+        # Clear existing items
+        for i in self.template_tree.get_children():
+            self.template_tree.delete(i)
+
+        # Create categories
+        category_nodes = {}
+        for category_name in self.template_manager.categories:
+            node = self.template_tree.insert("", "end", text=category_name, open=True)
+            category_nodes[category_name] = node
+
+        # Add templates to categories
+        for template in self.template_manager.templates:
+            if template.category in category_nodes:
+                parent_node = category_nodes[template.category]
+                # Store the template object itself in the 'values' tuple for later retrieval
+                self.template_tree.insert(parent_node, "end", text=template.name, values=(template,))
+
+    def on_template_selected(self, event):
+        selection = self.template_tree.selection()
+        if not selection:
+            return
+
+        selected_item = self.template_tree.item(selection[0])
+
+        # Check if a template (child node) is selected, not a category
+        if selected_item['values']:
+            template = selected_item['values'][0]
+
+            self.template_preview_text.config(state=tk.NORMAL)
+            self.template_preview_text.delete('1.0', tk.END)
+
+            preview_content = f"Name: {template.name}\n"
+            preview_content += f"Category: {template.category}\n"
+            preview_content += f"Difficulty: {template.difficulty}\n"
+            preview_content += f"Est. Time: {template.estimated_time}\n\n"
+            preview_content += f"Description:\n{template.description}\n\n"
+            preview_content += f"Steps ({len(template.steps)}):\n"
+
+            # Use the same logic as update_sequence_listbox for a consistent look
+            for i, step in enumerate(template.steps):
+                preview_content += self.format_step_for_display(i + 1, step) + "\n"
+
+            self.template_preview_text.insert('1.0', preview_content)
+            self.template_preview_text.config(state=tk.DISABLED)
+
+            self.insert_template_button.config(state=tk.NORMAL)
+        else:
+            # It's a category, clear preview and disable button
+            self.template_preview_text.config(state=tk.NORMAL)
+            self.template_preview_text.delete('1.0', tk.END)
+            self.template_preview_text.config(state=tk.DISABLED)
+            self.insert_template_button.config(state=tk.DISABLED)
+
+    def insert_selected_template(self):
+        selection = self.template_tree.selection()
+        if not selection:
+            return
+
+        selected_item = self.template_tree.item(selection[0])
+        if selected_item['values']:
+            template = selected_item['values'][0]
+
+            # Use deepcopy to ensure templates can be reused without modification issues
+            steps_to_insert = copy.deepcopy(template.steps)
+
+            self.action_sequence.extend(steps_to_insert)
+            self.update_sequence_listbox()
+            logging.info(f"Inserted template '{template.name}' with {len(steps_to_insert)} steps.")
+
+            # Optional: Switch back to the main tab to show the result
+            # self.notebook.select(self.main_tab)
+
+    def format_step_for_display(self, number, step):
+        """Helper function to format a single step dictionary into a readable string."""
+        step_type = step.get('step_type', 'simple')
+        action_type = step.get('action_type')
+        text = f"{number}: "
+
+        if step_type == 'simple':
+            if action_type == 'Set Variable':
+                params = step.get('action_params', {})
+                text += f"Set Var: '{params.get('variable_name', 'N/A')}' = '{params.get('variable_value', 'N/A')}'"
+            elif action_type == 'Modify Variable':
+                params = step.get('action_params', {})
+                text += f"Modify Var: '{params.get('modify_variable_name', 'N/A')}' {params.get('modify_variable_operation', '?')} {params.get('modify_variable_value', '?')}"
+            elif action_type == 'OCR':
+                params = step.get('action_params', {})
+                text += f"OCR to Var: '{params.get('output_variable_name', 'N/A')}'"
+            else:
+                mode = step.get('detection_mode', '?')
+                action = step.get('action_type', '?')
+                target = step.get('detection_target_name', 'Unknown')
+                text += f"Find {mode} '{target}', then {action}"
+        elif step_type == 'conditional_loop':
+            primary_target_name = step.get('primary_target', {}).get('detection_target_name', 'N/A')
+            fallback_action = step.get('on_fail', {}).get('action_type', 'N/A')
+            retries = step.get('max_retries', 'N/A')
+            text += f"CONDITIONAL ({retries}x): Find '{primary_target_name}', on fail: {fallback_action}"
+        elif step_type == 'loop':
+            loop_mode = step.get('loop_mode', 'repeat')
+            if loop_mode == 'repeat':
+                repeat_count = step.get('loop_repeat_count', 'N/A')
+                text += f"LOOP: Repeat {repeat_count} times"
+            else:
+                text += f"LOOP: Until condition"
+        elif step_type == 'time_based_condition':
+            time_cond = step.get('time_condition', {})
+            hour = time_cond.get('hour', '??')
+            minute = time_cond.get('minute', '??')
+            text += f"TIME CONDITION: at {hour:02d}:{minute:02d}"
+        elif step_type == 'wait':
+            duration = step.get('duration', 0)
+            text += f"Wait for {duration:.2f} seconds"
+        elif step_type == 'conditional_branch':
+            condition = step.get('condition', {})
+            var = condition.get('variable', '?').replace('{', '').replace('}', '')
+            op = condition.get('operator', '?')
+            val = condition.get('value', '?')
+            text += f"IF {var} {op} {val}"
+        else:
+            text += "Unknown Step Type"
+
+        return text

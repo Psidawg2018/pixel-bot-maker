@@ -1,0 +1,21 @@
+[
+    {
+        "step_type": "simple",
+        "window_title": "CHANGE_ME",
+        "detection_mode": "Image",
+        "action_type": "Click",
+        "action_params": {},
+        "detection_target": [
+            "templates/placeholder.png"
+        ],
+        "detection_target_name": "placeholder.png",
+        "search_region": null,
+        "on_failure": {
+            "policy": "Stop"
+        },
+        "wait_params": {
+            "type": "Fixed",
+            "fixed_time": 1.0
+        }
+    }
+]

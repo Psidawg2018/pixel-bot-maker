@@ -1,0 +1,44 @@
+{
+    "templates": [
+        {
+            "name": "Basic Clicker",
+            "category": "Gaming",
+            "description": "A simple template that clicks on a target image repeatedly. Good for farming or other repetitive tasks.",
+            "difficulty": "Beginner",
+            "estimated_time": "1 min",
+            "file": "basic_clicker.json"
+        },
+        {
+            "name": "Form Filler",
+            "category": "Productivity",
+            "description": "Fills out a form with a username and password using variables. Replace placeholder images with your own.",
+            "difficulty": "Beginner",
+            "estimated_time": "2 mins",
+            "file": "form_filler.json"
+        },
+        {
+            "name": "Image Hunter",
+            "category": "Testing",
+            "description": "Finds and clicks a series of images in sequence. Useful for UI testing or multi-step processes.",
+            "difficulty": "Intermediate",
+            "estimated_time": "3 mins",
+            "file": "image_hunter.json"
+        },
+        {
+            "name": "Data Extractor",
+            "category": "Productivity",
+            "description": "Uses OCR to extract text from a defined screen region and types it out. You must set the OCR region.",
+            "difficulty": "Intermediate",
+            "estimated_time": "2 mins",
+            "file": "data_extractor.json"
+        },
+        {
+            "name": "Conditional Loop (Farming)",
+            "category": "Gaming",
+            "description": "Checks for a primary target (e.g., an enemy). If not found, it performs a fallback action (e.g., find new enemy) and retries.",
+            "difficulty": "Advanced",
+            "estimated_time": "5 mins",
+            "file": "conditional_loop.json"
+        }
+    ]
+}
