@@ -51,6 +51,7 @@ class App(tk.Tk):
         self.loop_counters = {} # To track 'repeat x times' loops
         self.max_execution_depth = 1000
         self.execution_depth = 0
+        self.toggling = False # Debounce flag for hotkey
         self.hide_window_var = tk.BooleanVar(value=self.settings_manager.get_setting('hide_bot_default'))
         self.dry_run_var = tk.BooleanVar(value=False)
         self.target_window_title = tk.StringVar()
@@ -430,6 +431,9 @@ class App(tk.Tk):
                 hour = time_cond.get('hour', '??')
                 minute = time_cond.get('minute', '??')
                 text += f"TIME CONDITION: at {hour:02d}:{minute:02d}"
+            elif step_type == 'wait':
+                duration = step.get('duration', 0)
+                text += f"Wait for {duration:.2f} seconds"
             else:
                 text += "Unknown Step Type"
 
@@ -591,41 +595,54 @@ class App(tk.Tk):
         logging.info(f"Bot running... Press '{hotkey_str.upper()}' to stop.")
 
     def toggle_bot(self):
-        if self.running:
-            self.running = False
-            self.start_button.config(text="Start Bot")
-            if self.scan_job:
-                self.after_cancel(self.scan_job)
-            self.scan_job = None
-            if self.hotkey_listener:
-                self.hotkey_listener.stop()
-            self.hotkey_listener = None
-            logging.info("Bot stopped by user.")
-            if self.hide_window_var.get():
-                self.deiconify()
-        else:
-            if not self.action_sequence:
-                logging.info("Cannot start: Action sequence is empty.")
-                return
+        if self.toggling:
+            logging.warning("Hotkey press ignored, toggle already in progress.")
+            return
 
-            try:
-                self.execution_engine.validate_sequence(self.action_sequence)
-            except ValueError as e:
-                logging.error(f"Error: {e}")
-                return
+        self.toggling = True
 
-            self.variables.clear()
-            self.execution_stack = [(self.action_sequence, 0)]
-            self.conditional_loop_retry_counts.clear() # Reset all conditional loop counters
-            self.step_retry_counts.clear() # Reset step-specific retries
-            self.time_condition_executed.clear() # Reset executed time conditions
-            self.loop_counters.clear() # Reset all loop counters
-            self.running = True
-            self.start_button.config(text="Stop Bot")
-            self.start_hotkey_listener()
-            if self.hide_window_var.get():
-                self.withdraw()
-            self.execution_engine.run_scan_loop()
+        try:
+            if self.running:
+                self.running = False
+                self.start_button.config(text="Start Bot")
+                if self.scan_job:
+                    self.after_cancel(self.scan_job)
+                self.scan_job = None
+                if self.hotkey_listener:
+                    self.hotkey_listener.stop()
+                self.hotkey_listener = None
+                logging.info("Bot stopped by user.")
+                if self.hide_window_var.get():
+                    self.deiconify()
+            else:
+                if not self.action_sequence:
+                    logging.info("Cannot start: Action sequence is empty.")
+                    self.toggling = False # Reset flag immediately
+                    return
+
+                try:
+                    self.execution_engine.validate_sequence(self.action_sequence)
+                except ValueError as e:
+                    logging.error(f"Error: {e}")
+                    self.toggling = False # Reset flag immediately
+                    return
+
+                self.variables.clear()
+                self.execution_stack = [(self.action_sequence, 0)]
+                self.conditional_loop_retry_counts.clear()
+                self.step_retry_counts.clear()
+                self.time_condition_executed.clear()
+                self.loop_counters.clear()
+                self.running = True
+                self.start_button.config(text="Stop Bot")
+                self.start_hotkey_listener()
+                if self.hide_window_var.get():
+                    self.withdraw()
+                self.execution_engine.run_scan_loop()
+        finally:
+            # Use self.after to reset the flag. This gives the hotkey listener
+            # thread time to properly stop and prevents rapid toggling issues.
+            self.after(200, lambda: setattr(self, 'toggling', False))
 
     def _bgr_to_hex(self, bgr_color):
         b, g, r = bgr_color

@@ -80,110 +80,16 @@ class ExecutionEngine:
 
             current_step = current_sequence[current_index]
             step_type = current_step.get('step_type', 'simple')
-            action_type = current_step.get('action_type')
             step_number_str = f"Step {current_index + 1}" # For logging
-
-            # Handle non-UI actions first
-            if action_type == 'Set Variable':
-                params = current_step.get('action_params', {})
-                var_name = params.get('variable_name')
-                var_value = self.variable_manager.substitute(params.get('variable_value')) # Allow variables in values
-
-                if not var_name:
-                    logging.error(f"Error in {step_number_str}: 'Set Variable' action has no variable name. Stopping bot.")
-                    self.app.toggle_bot()
-                    return
-
-                if self.app.dry_run_var.get():
-                    logging.info(f"[DRY RUN] Would set variable '{var_name}' to '{var_value}'")
-                else:
-                    logging.info(f"Setting variable '{var_name}' to '{var_value}'")
-                    self.app.variables[var_name] = var_value
-
-                self.app.execution_stack[-1] = (current_sequence, current_index + 1)
-                self._handle_post_action_wait(current_step) # Still respect wait times
-                return
-            elif action_type == 'Modify Variable':
-                params = current_step.get('action_params', {})
-                var_name = params.get('modify_variable_name')
-                operation = params.get('modify_variable_operation')
-                value_str = self.variable_manager.substitute(params.get('modify_variable_value', '0'))
-
-                if not var_name:
-                    logging.error(f"Error in {step_number_str}: 'Modify Variable' action has no variable name. Stopping bot.")
-                    self.app.toggle_bot()
-                    return
-
-                current_value_str = self.app.variables.get(var_name, '0')
-
-                if self.app.dry_run_var.get():
-                    logging.info(f"[DRY RUN] Would {operation} variable '{var_name}' by '{value_str}'")
-                else:
-                    if operation == 'set':
-                        self.app.variables[var_name] = value_str
-                        logging.info(f"Set variable '{var_name}' to '{value_str}'")
-                    else: # add or subtract
-                        try:
-                            current_value = float(current_value_str)
-                            value_to_op = float(value_str)
-                            new_value = 0
-                            if operation == 'add':
-                                new_value = current_value + value_to_op
-                            elif operation == 'subtract':
-                                new_value = current_value - value_to_op
-
-                            # Store as int if it's a whole number, otherwise float
-                            if new_value == int(new_value):
-                                self.app.variables[var_name] = str(int(new_value))
-                            else:
-                                self.app.variables[var_name] = str(new_value)
-
-                            logging.info(f"Variable '{var_name}' {operation}ed by {value_to_op}. New value: {self.app.variables[var_name]}")
-
-                        except ValueError:
-                            logging.error(f"Error in {step_number_str}: Cannot perform arithmetic on non-numeric variable '{var_name}' (value: '{current_value_str}') or input '{value_str}'. Stopping bot.")
-                            self.app.toggle_bot()
-                            return
-
-                self.app.execution_stack[-1] = (current_sequence, current_index + 1)
-                self._handle_post_action_wait(current_step)
-                return
-            elif action_type == 'OCR':
-                params = current_step.get('action_params', {})
-                region = params.get('ocr_region')
-                output_var = params.get('output_variable_name')
-
-                if not region or not output_var:
-                    logging.error(f"Error in {step_number_str}: OCR step is not configured correctly. Stopping bot.")
-                    self.app.toggle_bot()
-                    return
-
-                if self.app.dry_run_var.get():
-                    logging.info(f"[DRY RUN] Would perform OCR on region {region} and save to '{output_var}'")
-                    # In a dry run, we can't know the result, so we'll save a placeholder
-                    self.app.variables[output_var] = "DRY_RUN_OCR_RESULT"
-                else:
-                    logging.info(f"Performing OCR on region {region} and saving to '{output_var}'...")
-                    screenshot = capture_screen(region)
-                    extracted_text = extract_text_from_image(screenshot)
-
-                    if extracted_text == "TESSERACT_NOT_FOUND":
-                        logging.critical("FATAL: Tesseract OCR engine not found. Please install it to use the OCR feature. Stopping bot.")
-                        self.app.toggle_bot()
-                        return
-
-                    logging.info(f"OCR Result: '{extracted_text}'. Stored in variable '{output_var}'.")
-                    self.app.variables[output_var] = extracted_text
-
-                self.app.execution_stack[-1] = (current_sequence, current_index + 1)
-                self._handle_post_action_wait(current_step)
-                return
 
             # For other actions, we pass the step and its context
             step_context = {'sequence': current_sequence, 'index': current_index, 'number_str': step_number_str}
 
             if step_type == 'simple':
                 self._execute_simple_step(current_step, step_context)
+            elif step_type == 'wait':
+                self._execute_wait_step(current_step, step_context)
+                return # The wait step handles its own continuation
             elif step_type == 'conditional_branch':
                 logging.info(f"Evaluating condition for {step_number_str}...")
                 # First, advance the parent sequence *before* pushing a new one.
@@ -345,94 +251,181 @@ class ExecutionEngine:
     def _execute_single_action(self, action_step, scan_region):
         """
         Executes a single, simple action. Returns True on success, False on failure.
+        Handles both conditional (Image/Color) and unconditional actions.
         """
-        logging.info(f"  - Action: Find {action_step['detection_mode']} '{action_step.get('detection_target_name', 'N/A')}'...")
-        haystack_img = capture_screen(scan_region)
+        action_type = action_step.get('action_type')
+        detection_mode = action_step.get('detection_mode')
 
-        target_pos = None
-        if action_step['detection_mode'] == "Color":
-            locations = find_color(haystack_img, action_step['detection_target'])
-            if locations:
-                target_pos = locations[0]
-        elif action_step['detection_mode'] == "Image":
-            try:
-                targets = action_step['detection_target']
-                if isinstance(targets, str): # Backward compatibility
-                    targets = [targets]
+        # --- Handle special action types that are self-contained ---
+        if action_type == 'OCR':
+            return self._perform_ocr_action(action_step, scan_region)
 
-                needle_imgs = []
-                for target_path in targets:
-                    img = self.load_template_image(target_path)
-                    if img is None:
-                        continue
-                    needle_imgs.append(img)
+        target_found = False
+        action_center_x, action_center_y = None, None
+        preview_w, preview_h = None, None
 
-                if not needle_imgs:
-                    logging.error(f"    - Error: No valid template images could be loaded.")
+        # --- STEP 1: Find the target if required by detection_mode ---
+        if detection_mode in ["Image", "Color"]:
+            logging.info(f"  - Find {detection_mode}: '{action_step.get('detection_target_name', 'N/A')}'...")
+            haystack_img = capture_screen(scan_region)
+
+            if detection_mode == "Color":
+                locations = find_color(haystack_img, action_step['detection_target'])
+                if locations:
+                    target_found = True
+                    action_center_x, action_center_y = locations[0]
+            elif detection_mode == "Image":
+                try:
+                    targets = action_step['detection_target']
+                    if isinstance(targets, str): targets = [targets]
+
+                    needle_imgs = [self.load_template_image(p) for p in targets if p]
+                    if not needle_imgs:
+                        logging.error(f"    - Error: No valid template images could be loaded for step.")
+                        return False
+
+                    threshold = self.app.settings_manager.get_setting('image_similarity_threshold')
+                    match_data = find_image(haystack_img, needle_imgs, threshold=threshold)
+                    if match_data:
+                        target_found = True
+                        top_left_x, top_left_y, width, height = match_data
+                        action_center_x = top_left_x + width // 2
+                        action_center_y = top_left_y + height // 2
+                        preview_w, preview_h = width, height
+                except Exception as e:
+                    logging.error(f"    - Error during image search: {e}")
                     return False
 
-                threshold = self.app.settings_manager.get_setting('image_similarity_threshold')
-                target_pos = find_image(haystack_img, needle_imgs, threshold=threshold)
-            except Exception as e:
-                logging.error(f"    - Error during image search: {e}")
-                return False
-
-        if target_pos:
-            logging.info(f"    - Target found.")
-            abs_x = scan_region['left'] + target_pos[0]
-            abs_y = scan_region['top'] + target_pos[1]
-
-            # --- Action Preview ---
-            preview_duration = 0.5 # in seconds
-            action_type = action_step['action_type']
-            if not self.app.dry_run_var.get():
-                # TODO: Make this a setting
-                if action_type in ["Click", "Right-click", "Click with Offset"]:
-                    logging.info(f"    - Previewing action at ({abs_x}, {abs_y}) for {preview_duration}s...")
-                    preview = ActionPreview(self.app, abs_x, abs_y, duration=int(preview_duration * 1000))
-                    self.app.wait_window(preview)
-
-
-            action_params = action_step.get('action_params', {})
-
-            if self.app.dry_run_var.get():
-                logging.info(f"    - [DRY RUN] Would perform action: {action_type}")
+            if target_found:
+                logging.info(f"    - Target found.")
             else:
-                if action_type == "Click":
-                    logging.info(f"    - Performing action: Click at ({abs_x}, {abs_y})")
-                    click_at(abs_x, abs_y)
-                elif action_type == "Right-click":
-                    logging.info(f"    - Performing action: Right-click at ({abs_x}, {abs_y})")
-                    right_click_at(abs_x, abs_y)
-                elif action_type == "Click with Offset":
-                    offset_x = action_params.get('click_offset_x', 0)
-                    offset_y = action_params.get('click_offset_y', 0)
-                    click_x = abs_x + offset_x
-                    click_y = abs_y + offset_y
-                    logging.info(f"    - Performing action: Click with offset at ({click_x}, {click_y})")
-                    click_at(click_x, click_y)
-                elif action_type == "Type":
-                    text_to_type = action_params.get('text', '')
-                    substituted_text = self.variable_manager.substitute(text_to_type)
-                    logging.info(f"    - Performing action: Type '{substituted_text}'")
-                    type_text(substituted_text)
-                elif action_type == "Key Combo":
-                    key_combo = action_params.get('key_combo', '')
-                    substituted_combo = self.variable_manager.substitute(key_combo)
-                    logging.info(f"    - Performing action: Press keys '{substituted_combo}'")
-                    press_key_combination(substituted_combo)
-                elif action_type == "Scroll":
-                    direction = action_params.get('scroll_direction', 'Down')
-                    amount = action_params.get('scroll_amount', 5)
-                    logging.info(f"    - Performing action: Scroll {direction} by {amount}")
-                    scroll_wheel(direction.lower(), amount)
+                logging.warning("    - Target not found.")
+        else:
+            # No detection needed, so the action is unconditional.
+            target_found = True
+            logging.info(f"  - Unconditional action: {action_type}")
 
-            # Sub-actions have waits too
+        # --- STEP 2: Execute action if target was found (or not needed) ---
+        if target_found:
+            abs_x, abs_y = None, None
+            if action_center_x is not None:
+                abs_x = scan_region['left'] + action_center_x
+                abs_y = scan_region['top'] + action_center_y
+
+            self._perform_action(action_type, action_step, abs_x, abs_y, preview_w, preview_h)
             self._handle_post_action_wait(action_step)
             return True
         else:
-            logging.warning("    - Target not found.")
             return False
+
+    def _perform_ocr_action(self, action_step, scan_region):
+        action_params = action_step.get('action_params', {})
+        output_var = action_params.get('output_variable_name')
+
+        # OCR uses its own region defined in params, which is absolute screen coords.
+        final_region = action_params.get('ocr_region')
+
+        if not final_region or not output_var:
+            logging.error(f"Error in step: OCR step is not configured correctly.")
+            return False
+
+        logging.info(f"Performing OCR on region {final_region} and saving to '{output_var}'...")
+        if self.app.dry_run_var.get():
+            logging.info(f"    - [DRY RUN] Would perform OCR.")
+        else:
+            screenshot = capture_screen(final_region)
+            extracted_text = extract_text_from_image(screenshot)
+            if extracted_text == "TESSERACT_NOT_FOUND":
+                logging.critical("FATAL: Tesseract OCR engine not found. Please install it. Stopping bot.")
+                self.app.toggle_bot()
+                return False
+            logging.info(f"OCR Result: '{extracted_text}'. Stored in variable '{output_var}'.")
+            self.variable_manager.variables[output_var] = extracted_text
+
+        self._handle_post_action_wait(action_step)
+        return True
+
+    def _perform_action(self, action_type, action_step, abs_x, abs_y, width=None, height=None):
+        """Helper to execute the final action after detection is successful."""
+        action_params = action_step.get('action_params', {})
+
+        if self.app.dry_run_var.get():
+            logging.info(f"    - [DRY RUN] Would perform action: {action_type} at ({abs_x}, {abs_y})")
+            return
+
+        # --- Variable Actions ---
+        if action_type == 'Set Variable':
+            var_name = action_params.get('variable_name')
+            var_value = self.variable_manager.substitute(action_params.get('variable_value'))
+            if not var_name:
+                logging.error(f"Error in step: 'Set Variable' action has no variable name.")
+                return
+            logging.info(f"    - Performing action: Set variable '{var_name}' to '{var_value}'")
+            self.variable_manager.variables[var_name] = var_value
+
+        elif action_type == 'Modify Variable':
+            var_name = action_params.get('modify_variable_name')
+            operation = action_params.get('modify_variable_operation')
+            value_str = self.variable_manager.substitute(action_params.get('modify_variable_value', '0'))
+            if not var_name:
+                logging.error(f"Error in step: 'Modify Variable' action has no variable name.")
+                return
+
+            current_value_str = self.variable_manager.variables.get(var_name, '0')
+            try:
+                current_value = float(current_value_str)
+                value_to_op = float(value_str)
+                new_value = 0
+                if operation == 'add': new_value = current_value + value_to_op
+                elif operation == 'subtract': new_value = current_value - value_to_op
+                elif operation == 'set': new_value = value_to_op
+
+                if new_value == int(new_value): self.variable_manager.variables[var_name] = str(int(new_value))
+                else: self.variable_manager.variables[var_name] = str(new_value)
+                logging.info(f"    - Performing action: Variable '{var_name}' {operation}ed by {value_to_op}. New value: {self.variable_manager.variables[var_name]}")
+            except ValueError:
+                logging.error(f"Error in step: Cannot perform arithmetic on non-numeric variable '{var_name}' (value: '{current_value_str}') or input '{value_str}'.")
+
+        # --- UI Interaction Actions ---
+        elif action_type in ["Click", "Right-click", "Click with Offset"]:
+            if abs_x is None or abs_y is None:
+                logging.error(f"Error in step: Action '{action_type}' requires a screen location, but none was found.")
+                return
+            logging.info(f"    - Previewing action at ({abs_x}, {abs_y})...")
+            preview = ActionPreview(self.app, abs_x, abs_y, width=width, height=height, duration=500)
+            self.app.wait_window(preview)
+
+            if action_type == "Click":
+                logging.info(f"    - Performing action: Click at ({abs_x}, {abs_y})")
+                click_at(abs_x, abs_y)
+            elif action_type == "Right-click":
+                logging.info(f"    - Performing action: Right-click at ({abs_x}, {abs_y})")
+                right_click_at(abs_x, abs_y)
+            elif action_type == "Click with Offset":
+                offset_x = action_params.get('click_offset_x', 0)
+                offset_y = action_params.get('click_offset_y', 0)
+                click_x = abs_x + offset_x
+                click_y = abs_y + offset_y
+                logging.info(f"    - Performing action: Click with offset at ({click_x}, {click_y})")
+                click_at(click_x, click_y)
+
+        elif action_type == "Type":
+            text_to_type = action_params.get('text', '')
+            substituted_text = self.variable_manager.substitute(text_to_type)
+            logging.info(f"    - Performing action: Type '{substituted_text}'")
+            type_text(substituted_text)
+
+        elif action_type == "Key Combo":
+            key_combo = action_params.get('key_combo', '')
+            substituted_combo = self.variable_manager.substitute(key_combo)
+            logging.info(f"    - Performing action: Press keys '{substituted_combo}'")
+            press_key_combination(substituted_combo)
+
+        elif action_type == "Scroll":
+            direction = action_params.get('scroll_direction', 'Down')
+            amount = action_params.get('scroll_amount', 5)
+            logging.info(f"    - Performing action: Scroll {direction} by {amount}")
+            scroll_wheel(direction.lower(), amount)
 
     def _execute_simple_step(self, step, context):
         target_window_title = step.get("window_title")
@@ -448,10 +441,8 @@ class ExecutionEngine:
                 self.app.scan_job = self.app.after(2000, self.run_scan_loop)
                 return
             target_window = target_windows[0]
-            # Default scan region is the entire window
             scan_region = {'top': target_window.top, 'left': target_window.left, 'width': target_window.width, 'height': target_window.height}
 
-            # If a specific search region is defined for the step, use it instead
             if step.get('search_region'):
                 custom_region = step['search_region']
                 scan_region = {
@@ -486,7 +477,7 @@ class ExecutionEngine:
                 logging.info("Skipping to next step.")
                 sequence, index = self.app.execution_stack[-1]
                 self.app.execution_stack[-1] = (sequence, index + 1)
-                self.app.scan_job = self.app.after(10, self.run_scan_loop) # Proceed immediately
+                self.app.scan_job = self.app.after(10, self.run_scan_loop)
 
             elif policy == 'Retry':
                 max_retries = on_failure.get('retries', 3)
@@ -496,7 +487,7 @@ class ExecutionEngine:
                 if current_retries < max_retries:
                     self.app.step_retry_counts[step_id] = current_retries + 1
                     logging.info(f"Retrying step... (Attempt {current_retries + 1}/{max_retries})")
-                    self.app.scan_job = self.app.after(2000, self.run_scan_loop) # Retry same step
+                    self.app.scan_job = self.app.after(2000, self.run_scan_loop)
                 else:
                     logging.error(f"Step failed after {max_retries} retries. Stopping bot.")
                     self.app.toggle_bot()
@@ -661,6 +652,25 @@ class ExecutionEngine:
 
         logging.error(f"Unknown fallback action type: {action_type}")
         return False
+
+    def _execute_wait_step(self, step, context):
+        """Handles the 'wait' step type."""
+        try:
+            duration = float(step.get('duration', 1.0))
+        except (ValueError, TypeError):
+            logging.error(f"Invalid duration for wait step: {step.get('duration')}. Stopping bot.")
+            self.app.toggle_bot()
+            return
+
+        logging.info(f"{context['number_str']}: Waiting for {duration:.2f} seconds...")
+
+        # Advance the stack to the next step
+        sequence, index = self.app.execution_stack[-1]
+        self.app.execution_stack[-1] = (sequence, index + 1)
+
+        # Schedule the next scan loop after the duration
+        wait_ms = int(duration * 1000)
+        self.app.scan_job = self.app.after(wait_ms, self.run_scan_loop)
 
     def _execute_time_based_condition_step(self, step, context):
         time_cond = step.get('time_condition', {})

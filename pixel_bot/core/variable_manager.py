@@ -30,35 +30,42 @@ class VariableManager:
         """
         var_name = condition.get('variable', '').strip()
         operator = condition.get('operator')
-        value_to_compare = self.substitute(condition.get('value', ''))
+        value_to_compare_str = self.substitute(condition.get('value', ''))
 
         if not var_name or not operator:
             logging.error(f"Invalid condition: {condition}")
             return False
 
-        actual_value = self.substitute(var_name)
+        actual_value_str = self.substitute(var_name)
 
-        # For numeric comparisons, try to convert both to floats
+        # First, attempt numeric comparison if applicable
         try:
-            num_actual_value = float(actual_value)
-            num_value_to_compare = float(value_to_compare)
-            is_numeric = True
-        except (ValueError, TypeError):
-            is_numeric = False
+            num_actual = float(actual_value_str)
+            num_compare = float(value_to_compare_str)
 
-        if operator == "equals":
-            return actual_value == value_to_compare
-        elif operator == "not equals":
-            return actual_value != value_to_compare
-        elif operator == "contains":
-            return value_to_compare in actual_value
-        elif operator == "not contains":
-            return value_to_compare not in actual_value
-        elif is_numeric:
+            if operator == "equals":
+                return num_actual == num_compare
+            if operator == "not equals":
+                return num_actual != num_compare
             if operator == "is greater than":
-                return num_actual_value > num_value_to_compare
-            elif operator == "is less than":
-                return num_actual_value < num_value_to_compare
+                return num_actual > num_compare
+            if operator == "is less than":
+                return num_actual < num_compare
+            # If operator is not a numeric one (e.g., 'contains'),
+            # fall through to string-based comparison.
+        except (ValueError, TypeError):
+            # One or both values are not numeric, so we must use string comparison.
+            pass
 
-        logging.warning(f"Unsupported operator '{operator}' for non-numeric comparison.")
+        # String-based comparison
+        if operator == "equals":
+            return actual_value_str == value_to_compare_str
+        if operator == "not equals":
+            return actual_value_str != value_to_compare_str
+        if operator == "contains":
+            return value_to_compare_str in actual_value_str
+        if operator == "not contains":
+            return value_to_compare_str not in actual_value_str
+
+        logging.warning(f"Unsupported operator '{operator}' for the given value types (string).")
         return False
