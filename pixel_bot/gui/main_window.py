@@ -59,6 +59,7 @@ class App(tk.Tk):
         self.dry_run_var = tk.BooleanVar(value=False)
         self.target_window_title = tk.StringVar()
         self.target_window_title.set("") # Set to empty string initially
+        self.template_map = {}
 
         # --- Main Layout Frames ---
         main_frame = ttk.Frame(self, padding="10")
@@ -667,6 +668,7 @@ class App(tk.Tk):
             self.template_tree.delete(i)
 
         # Create categories
+        self.template_map.clear()
         category_nodes = {}
         for category_name in self.template_manager.categories:
             node = self.template_tree.insert("", "end", text=category_name, open=True)
@@ -676,20 +678,19 @@ class App(tk.Tk):
         for template in self.template_manager.templates:
             if template.category in category_nodes:
                 parent_node = category_nodes[template.category]
-                # Store the template object itself in the 'values' tuple for later retrieval
-                self.template_tree.insert(parent_node, "end", text=template.name, values=(template,))
+                item_id = self.template_tree.insert(parent_node, "end", text=template.name)
+                self.template_map[item_id] = template
 
     def on_template_selected(self, event):
         selection = self.template_tree.selection()
         if not selection:
             return
 
-        selected_item = self.template_tree.item(selection[0])
+        item_id = selection[0]
+        template = self.template_map.get(item_id)
 
         # Check if a template (child node) is selected, not a category
-        if selected_item['values']:
-            template = selected_item['values'][0]
-
+        if template:
             self.template_preview_text.config(state=tk.NORMAL)
             self.template_preview_text.delete('1.0', tk.END)
 
@@ -720,10 +721,10 @@ class App(tk.Tk):
         if not selection:
             return
 
-        selected_item = self.template_tree.item(selection[0])
-        if selected_item['values']:
-            template = selected_item['values'][0]
+        item_id = selection[0]
+        template = self.template_map.get(item_id)
 
+        if template:
             # Use deepcopy to ensure templates can be reused without modification issues
             steps_to_insert = copy.deepcopy(template.steps)
 
