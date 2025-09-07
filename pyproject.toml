@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pixel-bot-maker"
+version = "1.0.0"
+description = "A simple GUI application for creating automated bot scripts."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "pillow",
+    "mss",
+    "opencv-python",
+    "pytesseract",
+    "pynput",
+    "numpy",
+    "pygetwindow"
+]
+
+[project.gui-scripts]
+pixel-bot = "pixel_bot.main:main"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "."
+]
