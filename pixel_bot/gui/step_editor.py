@@ -949,10 +949,19 @@ class StepEditor(tk.Toplevel):
                 step['max_retries'] = max_retries
 
         elif step_type == 'conditional_branch':
+            variable_name = self.if_variable.get().strip()
+            if not variable_name:
+                messagebox.showerror("Invalid Input", "Variable name for condition cannot be empty.")
+                return
+
+            # Ensure the variable is wrapped in {{...}} for substitution
+            if not variable_name.startswith("{{") and not variable_name.endswith("}}"):
+                variable_name = f"{{{{{variable_name}}}}}"
+
             step = {
                 "step_type": "conditional_branch",
                 "condition": {
-                    "variable": self.if_variable.get(),
+                    "variable": variable_name,
                     "operator": self.if_operator.get(),
                     "value": self.if_value.get()
                 },
