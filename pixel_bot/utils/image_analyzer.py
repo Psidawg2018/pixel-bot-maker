@@ -83,7 +83,7 @@ def find_image(haystack_img, needle_imgs, threshold=0.8):
     """
     best_match = {
         'min_val': float('inf'), # Lower is better for TM_SQDIFF_NORMED
-        'max_loc': None,
+        'min_loc': None,
         'found_needle_w': 0,
         'found_needle_h': 0
     }
@@ -119,10 +119,10 @@ def find_image(haystack_img, needle_imgs, threshold=0.8):
     # For TM_SQDIFF_NORMED, a value of 0 is a perfect match.
     # We invert the logic: a match is good if min_val is *below* (1 - threshold).
     match_quality = 1 - best_match['min_val']
-    if match_quality >= threshold:
-        center_x = best_match['min_loc'][0] + best_match['found_needle_w'] // 2
-        center_y = best_match['min_loc'][1] + best_match['found_needle_h'] // 2
-        return (center_x, center_y)
+    if best_match['min_loc'] is not None and match_quality >= threshold:
+        top_left_x = best_match['min_loc'][0]
+        top_left_y = best_match['min_loc'][1]
+        return (top_left_x, top_left_y, best_match['found_needle_w'], best_match['found_needle_h'])
 
     return None
 

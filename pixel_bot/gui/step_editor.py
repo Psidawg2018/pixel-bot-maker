@@ -41,6 +41,7 @@ class StepEditor(tk.Toplevel):
 
         # --- VARS ---
         self.step_type = tk.StringVar(value=self.step_data.get('step_type', 'simple'))
+        self.wait_duration = tk.StringVar(value=str(self.step_data.get('duration', '1.0')))
 
         # Vars for Simple Action
         self.detection_mode = tk.StringVar(value=self.step_data.get('detection_mode', 'Image'))
@@ -140,7 +141,14 @@ class StepEditor(tk.Toplevel):
         step_type_frame.columnconfigure(0, weight=1) # Allow radio buttons to space out
 
         self.step_type_radios = {}
-        step_types = [("Simple Action", "simple"), ("If/Else", "conditional_branch"), ("Loop", "loop"), ("Time-based Condition", "time_based_condition"),("Conditional (Legacy)", "conditional_loop")]
+        step_types = [
+            ("Simple Action", "simple"),
+            ("Wait", "wait"),
+            ("If/Else", "conditional_branch"),
+            ("Loop", "loop"),
+            ("Time-based Condition", "time_based_condition"),
+            ("Conditional (Legacy)", "conditional_loop")
+        ]
         for i, (text, value) in enumerate(step_types):
             radio = ttk.Radiobutton(step_type_frame, text=text, variable=self.step_type, value=value, command=self.on_step_type_change)
             radio.grid(row=0, column=i, sticky="ew", padx=5)
@@ -152,6 +160,7 @@ class StepEditor(tk.Toplevel):
         self.loop_frame = ttk.Frame(content_frame, padding="10")
         self.conditional_branch_frame = ttk.Frame(content_frame, padding="10")
         self.time_based_condition_frame = ttk.Frame(content_frame, padding="10")
+        self.wait_step_frame = ttk.Frame(content_frame, padding="10")
 
         # --- UI for Simple Action Frame ---
         self.build_simple_action_ui(self.simple_action_frame)
@@ -167,6 +176,9 @@ class StepEditor(tk.Toplevel):
 
         # --- UI for Time-based Condition Frame ---
         self.build_time_based_condition_ui(self.time_based_condition_frame)
+
+        # --- UI for Wait Step Frame ---
+        self.build_wait_step_ui(self.wait_step_frame)
 
         # --- Save/Cancel Buttons (parented to button_frame) ---
         ttk.Button(button_frame, text="Cancel", command=self.destroy).pack(side="right", padx=10)
@@ -711,6 +723,14 @@ class StepEditor(tk.Toplevel):
             self.after_cancel(self._clock_job)
         super().destroy()
 
+    def build_wait_step_ui(self, parent_frame):
+        """Builds the UI for the 'Wait' step type."""
+        wait_frame = ttk.LabelFrame(parent_frame, text="Wait Configuration", padding="10")
+        wait_frame.pack(pady=5, padx=10, fill="x")
+
+        ttk.Label(wait_frame, text="Duration (seconds):").pack(side="left", padx=5)
+        ttk.Entry(wait_frame, textvariable=self.wait_duration, width=10).pack(side="left", padx=5)
+
     def on_step_type_change(self):
         step_type = self.step_type.get()
         # Hide all frames first
@@ -719,6 +739,7 @@ class StepEditor(tk.Toplevel):
         self.loop_frame.grid_remove()
         self.conditional_branch_frame.grid_remove()
         self.time_based_condition_frame.grid_remove()
+        self.wait_step_frame.grid_remove()
 
         if step_type == 'simple':
             self.simple_action_frame.grid(row=1, column=0, sticky="ew")
@@ -728,6 +749,8 @@ class StepEditor(tk.Toplevel):
             self.conditional_branch_frame.grid(row=1, column=0, sticky="ew")
         elif step_type == 'time_based_condition':
             self.time_based_condition_frame.grid(row=1, column=0, sticky="ew")
+        elif step_type == 'wait':
+            self.wait_step_frame.grid(row=1, column=0, sticky="ew")
         else: # conditional_loop
             self.conditional_loop_frame.grid(row=1, column=0, sticky="ew")
 
@@ -938,6 +961,19 @@ class StepEditor(tk.Toplevel):
                 "window_title": self.target_window_title.get(), # Retain for consistency, though not used by parent
             }
 
+        elif step_type == 'wait':
+            try:
+                duration = float(self.wait_duration.get())
+                if duration < 0:
+                    messagebox.showerror("Invalid Input", "Wait duration cannot be negative.")
+                    return
+            except ValueError:
+                messagebox.showerror("Invalid Input", "Wait duration must be a valid number.")
+                return
+            step = {
+                "step_type": "wait",
+                "duration": duration
+            }
         elif step_type == 'time_based_condition':
             try:
                 hour = int(self.time_condition_hour.get())

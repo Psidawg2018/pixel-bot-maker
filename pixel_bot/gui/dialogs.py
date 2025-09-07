@@ -184,17 +184,45 @@ class ColorSampler(tk.Toplevel):
 
 
 class ActionPreview(tk.Toplevel):
-    def __init__(self, master, x, y, size=30, duration=1000):
+    def __init__(self, master, x, y, width=None, height=None, duration=1000):
         super().__init__(master)
-        self.geometry(f"{size}x{size}+{x - size // 2}+{y - size // 2}")
-        self.attributes('-alpha', 0.6)
+
         self.attributes('-topmost', True)
-        self.overrideredirect(True) # No title bar or borders
-
-        canvas = tk.Canvas(self, bg='red', highlightthickness=0)
-        canvas.pack(fill="both", expand=True)
-
+        self.overrideredirect(True) # No window decorations
         self.after(duration, self.destroy)
+
+        # For image matches, show a yellow border around the found area
+        if width and height and width > 0 and height > 0:
+            border_thickness = 3
+            # The received x,y is the center of the found image.
+            # We need to calculate the top-left corner for the window geometry.
+            top_left_x = x - width // 2
+            top_left_y = y - height // 2
+
+            self.geometry(f"{width}x{height}+{top_left_x}+{top_left_y}")
+
+            # Create a canvas that fills the window
+            canvas = tk.Canvas(self, highlightthickness=0, bg='white')
+            # Make the canvas background transparent
+            self.wm_attributes('-transparentcolor', 'white')
+            canvas.pack(fill="both", expand=True)
+
+            # Draw a rectangle on the canvas, this will be the visible border
+            canvas.create_rectangle(
+                border_thickness // 2,
+                border_thickness // 2,
+                width - border_thickness // 2,
+                height - border_thickness // 2,
+                outline='yellow',
+                width=border_thickness
+            )
+        else:
+            # Fallback to the red dot for color finds or other point-based actions
+            size = 30
+            self.geometry(f"{size}x{size}+{x - size // 2}+{y - size // 2}")
+            self.attributes('-alpha', 0.6)
+            dot_canvas = tk.Canvas(self, bg='red', highlightthickness=0)
+            dot_canvas.pack(fill="both", expand=True)
 
 class HotkeyChangeDialog(tk.Toplevel):
     def __init__(self, master):
