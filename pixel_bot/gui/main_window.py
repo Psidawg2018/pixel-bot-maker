@@ -42,6 +42,7 @@ class App(tk.Tk):
         self.running = False
         self.scan_job = None
         self.hotkey_listener = None
+        self.hotkey_str = self.settings_manager.get_setting('hotkey')
         self.action_sequence = []
         self.variables = {} # For the new variable system
         self.execution_stack = [] # (sequence, index)
@@ -260,6 +261,15 @@ class App(tk.Tk):
         self.update_most_loaded_list()
         self.after(200, lambda: self.prompt_for_window_selection(is_splash=True))
 
+        self.start_persistent_hotkey_listener()
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def on_closing(self):
+        logging.info("Closing application and stopping listener...")
+        if self.hotkey_listener:
+            self.hotkey_listener.stop()
+        self.destroy()
+
     def _configure_theme(self):
         theme = self.settings_manager.get_setting('theme')
         colors = self.dark_theme if theme == 'dark' else self.light_theme
@@ -434,6 +444,12 @@ class App(tk.Tk):
             elif step_type == 'wait':
                 duration = step.get('duration', 0)
                 text += f"Wait for {duration:.2f} seconds"
+            elif step_type == 'conditional_branch':
+                condition = step.get('condition', {})
+                var = condition.get('variable', '?').replace('{', '').replace('}', '')
+                op = condition.get('operator', '?')
+                val = condition.get('value', '?')
+                text += f"IF {var} {op} {val}"
             else:
                 text += "Unknown Step Type"
 
@@ -560,71 +576,69 @@ class App(tk.Tk):
             logging.error("Wait times must be valid numbers.")
 
     def change_hotkey(self):
-        HotkeyChangeDialog(self)
+        # The listener is persistent now, so we just need to update the string it checks against.
+        # The HotkeyChangeDialog will call on_hotkey_changed when a new key is pressed.
+        HotkeyChangeDialog(self, self.on_hotkey_changed)
 
-    def start_hotkey_listener(self):
-        if self.hotkey_listener:
-            self.hotkey_listener.stop()
+    def on_hotkey_changed(self, new_hotkey_str):
+        """Callback from the hotkey dialog to update the hotkey."""
+        self.hotkey_str = new_hotkey_str
+        self.hotkey_label_var.set(new_hotkey_str)
+        self.settings_manager.set_setting('hotkey', new_hotkey_str)
+        logging.info(f"Hotkey changed to: {new_hotkey_str.upper()}")
 
-        hotkey_str = self.settings_manager.get_setting('hotkey')
-        target_key = None
-
+    def on_hotkey_press(self, key):
+        """The single callback for the persistent listener."""
         try:
-            if hasattr(keyboard.Key, hotkey_str.lower()):
-                target_key = getattr(keyboard.Key, hotkey_str.lower())
-            elif len(hotkey_str) == 1:
-                target_key = keyboard.KeyCode.from_char(hotkey_str)
-        except Exception as e:
-            logging.error(f"Error parsing hotkey '{hotkey_str}': {e}. Defaulting to F9.")
-            target_key = keyboard.Key.f9
-            self.hotkey_label_var.set("f9")
-            self.settings_manager.set_setting('hotkey', "f9")
+            key_name = None
+            if isinstance(key, keyboard.Key):
+                key_name = key.name
+            elif isinstance(key, keyboard.KeyCode):
+                key_name = key.char
 
-        if target_key is None:
-            logging.error(f"Invalid hotkey '{hotkey_str}'. Please set a valid key. Defaulting to F9.")
-            target_key = keyboard.Key.f9
-            self.hotkey_label_var.set("f9")
-            self.settings_manager.set_setting('hotkey', "f9")
-
-        def on_press(key):
-            if key == target_key:
+            if key_name and key_name.lower() == self.hotkey_str.lower():
                 self.after(0, self.toggle_bot)
+        except Exception as e:
+            logging.error(f"Error processing hotkey press: {e}")
 
-        self.hotkey_listener = keyboard.Listener(on_press=on_press)
-        self.hotkey_listener.start()
-        logging.info(f"Bot running... Press '{hotkey_str.upper()}' to stop.")
+    def start_persistent_hotkey_listener(self):
+        """Starts the single, persistent hotkey listener."""
+        try:
+            self.hotkey_listener = keyboard.Listener(on_press=self.on_hotkey_press)
+            self.hotkey_listener.start()
+            logging.info("Persistent hotkey listener started.")
+        except Exception as e:
+            logging.error(f"Failed to start hotkey listener: {e}")
+            messagebox.showerror("Hotkey Error", f"Failed to start hotkey listener: {e}\nHotkeys will be disabled.")
 
     def toggle_bot(self):
         if self.toggling:
-            logging.warning("Hotkey press ignored, toggle already in progress.")
+            logging.warning("Toggle ignored, already in progress.")
             return
 
         self.toggling = True
 
         try:
             if self.running:
+                # --- STOPPING THE BOT ---
                 self.running = False
-                self.start_button.config(text="Start Bot")
                 if self.scan_job:
                     self.after_cancel(self.scan_job)
                 self.scan_job = None
-                if self.hotkey_listener:
-                    self.hotkey_listener.stop()
-                self.hotkey_listener = None
-                logging.info("Bot stopped by user.")
+                self.start_button.config(text="Start Bot")
+                logging.info("Bot stopped.")
                 if self.hide_window_var.get():
                     self.deiconify()
             else:
+                # --- STARTING THE BOT ---
                 if not self.action_sequence:
                     logging.info("Cannot start: Action sequence is empty.")
-                    self.toggling = False # Reset flag immediately
                     return
 
                 try:
                     self.execution_engine.validate_sequence(self.action_sequence)
                 except ValueError as e:
                     logging.error(f"Error: {e}")
-                    self.toggling = False # Reset flag immediately
                     return
 
                 self.variables.clear()
@@ -633,15 +647,15 @@ class App(tk.Tk):
                 self.step_retry_counts.clear()
                 self.time_condition_executed.clear()
                 self.loop_counters.clear()
+
                 self.running = True
                 self.start_button.config(text="Stop Bot")
-                self.start_hotkey_listener()
+                logging.info(f"Bot starting... Press '{self.hotkey_str.upper()}' to stop.")
                 if self.hide_window_var.get():
                     self.withdraw()
                 self.execution_engine.run_scan_loop()
         finally:
-            # Use self.after to reset the flag. This gives the hotkey listener
-            # thread time to properly stop and prevents rapid toggling issues.
+            # Simple debounce to prevent too-rapid toggles
             self.after(200, lambda: setattr(self, 'toggling', False))
 
     def _bgr_to_hex(self, bgr_color):

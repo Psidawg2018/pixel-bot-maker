@@ -26,17 +26,20 @@ class VariableManager:
     def evaluate_condition(self, condition):
         """
         Evaluates a condition dictionary.
-        Example: {'variable': '{{count}}', 'operator': 'is greater than', 'value': '5'}
+        Example: {'variable': 'count', 'operator': 'is greater than', 'value': '5'}
         """
+        # The variable name itself is looked up directly. It should not contain {{...}}.
         var_name = condition.get('variable', '').strip()
         operator = condition.get('operator')
+        # The value to compare against can contain substitutions.
         value_to_compare_str = self.substitute(condition.get('value', ''))
 
         if not var_name or not operator:
             logging.error(f"Invalid condition: {condition}")
             return False
 
-        actual_value_str = self.substitute(var_name)
+        # Get the actual value by looking up the variable name. Default to empty string if not found.
+        actual_value_str = self.variables.get(var_name, "")
 
         # First, attempt numeric comparison if applicable
         try:

@@ -225,9 +225,10 @@ class ActionPreview(tk.Toplevel):
             dot_canvas.pack(fill="both", expand=True)
 
 class HotkeyChangeDialog(tk.Toplevel):
-    def __init__(self, master):
+    def __init__(self, master, callback):
         super().__init__(master)
         self.master = master
+        self.callback = callback
         self.title("Set Hotkey")
         self.geometry("300x150")
         self.configure(bg=self.master.bg_color)
@@ -254,14 +255,8 @@ class HotkeyChangeDialog(tk.Toplevel):
                 key_name = key.char
 
             if key_name:
-                self.hotkey_str.set(key_name)
-                self.master.settings_manager.set_setting('hotkey', key_name)
-                self.master.hotkey_label_var.set(key_name)
-                logging.info(f"Hotkey changed to: {key_name}")
-                # Restart the main listener if it's running
-                if self.master.hotkey_listener:
-                    self.master.hotkey_listener.stop()
-                    self.master.start_hotkey_listener()
+                # Use the callback to update the main app
+                self.callback(key_name)
         except Exception as e:
             logging.error(f"Could not set hotkey: {e}")
         finally:
