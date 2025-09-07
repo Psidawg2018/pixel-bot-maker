@@ -16,6 +16,7 @@ from ..utils.settings_manager import SettingsManager
 from .dialogs import HotkeyChangeDialog
 from .step_editor import StepEditor
 from .window_selector import WindowSelector
+from tkinter import messagebox
 
 
 class App(tk.Tk):
@@ -182,6 +183,25 @@ class App(tk.Tk):
 
         self.start_button = ttk.Button(bot_controls_frame, text="Start Bot", command=self.toggle_bot, style="Accent.TButton")
         self.start_button.pack(pady=10)
+
+        # --- Validation Panel ---
+        validation_frame = ttk.LabelFrame(main_tab, text="Validation Results", padding="10")
+        validation_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+        validation_frame.columnconfigure(0, weight=1)
+
+        self.validation_tree = ttk.Treeview(validation_frame, height=5, columns=("Severity", "Description"), show="headings")
+        self.validation_tree.heading("Severity", text="Severity")
+        self.validation_tree.heading("Description", text="Description")
+        self.validation_tree.column("Severity", width=80, anchor='w')
+        self.validation_tree.column("Description", width=300, anchor='w')
+        self.validation_tree.grid(row=0, column=0, sticky="nsew", pady=(0,5))
+
+        # Add tags for coloring
+        self.validation_tree.tag_configure('error', foreground='red')
+        self.validation_tree.tag_configure('warning', foreground='orange')
+        self.validation_tree.tag_configure('suggestion', foreground='lightblue')
+
+        ttk.Button(validation_frame, text="Validate Sequence", command=self.run_full_validation).grid(row=1, column=0, sticky="w")
 
         # --- Settings Tab Content ---
         settings_content_frame = ttk.Frame(settings_tab)
@@ -599,13 +619,18 @@ class App(tk.Tk):
                 # --- STARTING THE BOT ---
                 if not self.action_sequence:
                     logging.info("Cannot start: Action sequence is empty.")
+                    self.run_full_validation() # Show "empty" status
                     return
 
-                try:
-                    self.execution_engine.validate_sequence(self.action_sequence)
-                except ValueError as e:
-                    logging.error(f"Error: {e}")
+                # Run validation before starting
+                validation_result = self.run_full_validation()
+                if not validation_result.is_valid:
+                    messagebox.showerror("Validation Error", "Cannot start bot. Please fix the critical errors listed in the validation panel.")
                     return
+
+                if validation_result.warnings:
+                    if not messagebox.askyesno("Validation Warning", "There are warnings for this sequence that could cause issues.\n\nAre you sure you want to continue?"):
+                        return
 
                 self.variables.clear()
                 self.execution_stack = [(self.action_sequence, 0)]
@@ -678,8 +703,25 @@ class App(tk.Tk):
         for template in self.template_manager.templates:
             if template.category in category_nodes:
                 parent_node = category_nodes[template.category]
-                item_id = self.template_tree.insert(parent_node, "end", text=template.name)
+
+                # Determine status icon
+                status_icon = "✓"
+                tag = 'valid'
+                if not template.validation_result.is_valid:
+                    status_icon = "✗"
+                    tag = 'error'
+                elif template.validation_result.warnings:
+                    status_icon = "⚠"
+                    tag = 'warning'
+
+                display_name = f"{status_icon} {template.name}"
+                item_id = self.template_tree.insert(parent_node, "end", text=display_name, tags=(tag,))
                 self.template_map[item_id] = template
+
+        self.template_tree.tag_configure('error', foreground='red')
+        self.template_tree.tag_configure('warning', foreground='orange')
+        self.template_tree.tag_configure('valid', foreground='green')
+
 
     def on_template_selected(self, event):
         selection = self.template_tree.selection()
@@ -698,10 +740,21 @@ class App(tk.Tk):
             preview_content += f"Category: {template.category}\n"
             preview_content += f"Difficulty: {template.difficulty}\n"
             preview_content += f"Est. Time: {template.estimated_time}\n\n"
-            preview_content += f"Description:\n{template.description}\n\n"
-            preview_content += f"Steps ({len(template.steps)}):\n"
+            preview_content += f"Description:\n{template.description}\n"
 
-            # Use the same logic as update_sequence_listbox for a consistent look
+            # --- Validation Section ---
+            preview_content += f"\n--- Validation Status ---\n"
+            result = template.validation_result
+            if result.is_valid and not result.warnings:
+                preview_content += "✓ This template is valid.\n"
+            else:
+                for error in result.errors:
+                    preview_content += f"✗ Error: {error}\n"
+                for warning in result.warnings:
+                    preview_content += f"⚠ Warning: {warning}\n"
+
+            # --- Steps Section ---
+            preview_content += f"\n--- Steps ({len(template.steps)}) ---\n"
             for i, step in enumerate(template.steps):
                 preview_content += self.format_step_for_display(i + 1, step) + "\n"
 
@@ -786,3 +839,37 @@ class App(tk.Tk):
             text += "Unknown Step Type"
 
         return text
+
+    def run_full_validation(self):
+        """Runs the validator on the current sequence and updates the UI."""
+        if not self.action_sequence:
+            logging.info("Validation: Sequence is empty.")
+            self.populate_validation_tree(None)
+            return None
+
+        logging.info("Running full sequence validation...")
+        # Use the validator from the execution engine instance
+        result = self.execution_engine.validator.validate_sequence(self.action_sequence)
+        self.populate_validation_tree(result)
+        return result
+
+    def populate_validation_tree(self, result):
+        """Clears and populates the validation results treeview."""
+        for i in self.validation_tree.get_children():
+            self.validation_tree.delete(i)
+
+        if result is None:
+            self.validation_tree.insert("", "end", values=("Info", "Sequence is empty."), tags=('suggestion',))
+            return
+
+        if result.is_valid and not result.warnings and not result.suggestions:
+            self.validation_tree.insert("", "end", values=("Success", "No issues found."), tags=('success',))
+            self.validation_tree.tag_configure('success', foreground='green')
+            return
+
+        for error in result.errors:
+            self.validation_tree.insert("", "end", values=("Error", error), tags=('error',))
+        for warning in result.warnings:
+            self.validation_tree.insert("", "end", values=("Warning", warning), tags=('warning',))
+        for suggestion in result.suggestions:
+            self.validation_tree.insert("", "end", values=("Suggestion", suggestion), tags=('suggestion',))

@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from .script_validator import ScriptValidator
 
 class ScriptTemplate:
     def __init__(self, name, category, description, difficulty, estimated_time, file):
@@ -13,6 +14,7 @@ class ScriptTemplate:
         self.steps = []
         self.variables = []
         self.requirements = []
+        self.validation_result = None
 
     def load_steps(self, templates_base_path):
         """Loads the sequence of steps from the template's JSON file."""
@@ -37,9 +39,10 @@ class TemplateManager:
         self.templates_base_path = templates_base_path
         self.templates = []
         self.categories = ["Gaming", "Productivity", "Testing", "Maintenance"]
+        self.validator = ScriptValidator()
 
     def load_templates(self):
-        """Loads all templates from the manifest file."""
+        """Loads all templates from the manifest file and validates them."""
         manifest_path = os.path.join(self.templates_base_path, "template_manifest.json")
         if not os.path.exists(manifest_path):
             logging.warning("Template manifest file not found. No templates will be loaded.")
@@ -63,10 +66,15 @@ class TemplateManager:
                 file=template_data.get("file")
             )
             template.load_steps(self.templates_base_path)
+            # Validate the loaded steps
+            template.validation_result = self.validator.validate_sequence(template.steps)
+            if not template.validation_result.is_valid:
+                logging.warning(f"Template '{template.name}' has validation errors.")
+
             loaded_templates.append(template)
 
         self.templates = loaded_templates
-        logging.info(f"Loaded {len(self.templates)} script templates.")
+        logging.info(f"Loaded and validated {len(self.templates)} script templates.")
         return self.templates
 
     def get_templates_by_category(self, category):
