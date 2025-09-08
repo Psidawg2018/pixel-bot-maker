@@ -439,8 +439,9 @@ class App(tk.Tk):
             ])
 
         # ttk.Checkbutton is no longer used, tk.Checkbutton is used instead for better styling.
-        self.style.configure('TRadiobutton', background=colors['bg_color'], foreground=colors['text_color'], font=fonts["primary"])
-        self.style.map('TRadiobutton', background=[('active', colors['bg_color'])])
+        self.style.configure('TRadiobutton', background=colors['widget_bg_color'], foreground=colors['text_color'], font=fonts["primary"])
+        self.style.map('TRadiobutton', background=[('active', colors['widget_bg_color'])])
+        self.style.configure('Heading.TLabel', background=colors['bg_color'], foreground=colors['accent_color'], font=fonts["heading"])
 
         self.style.configure('TEntry',
             fieldbackground=colors['widget_bg_color'],
@@ -451,6 +452,17 @@ class App(tk.Tk):
 
         self.style.map('TEntry',
             focuscolor=[('focus', colors['accent_color'])])
+
+        # Style for OptionMenu
+        self.style.configure('TMenubutton',
+            background=colors['widget_bg_color'],
+            foreground=colors['text_color'],
+            arrowcolor=colors['text_color'],
+            relief='flat',
+            borderwidth=1,
+            padding=5)
+        self.style.map('TMenubutton',
+            background=[('active', colors['button_color'])])
 
         self.style.configure('TLabelFrame',
             background=colors['bg_color'],
