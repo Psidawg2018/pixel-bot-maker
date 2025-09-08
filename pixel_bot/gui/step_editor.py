@@ -136,6 +136,14 @@ class StepEditor(tk.Toplevel):
         content_frame.pack(side="top", fill="both", expand=True)
         content_frame.columnconfigure(0, weight=1)
 
+        # --- Validation Summary & Save/Cancel Buttons (parented to button_frame) ---
+        self.validation_summary_label = ttk.Label(button_frame, text="✓ Looks good!", anchor="w", foreground="green")
+        self.validation_summary_label.pack(side="left", padx=10, fill="x", expand=True)
+        self.save_button = ttk.Button(button_frame, text="Save Step", command=self.on_save, style="Accent.TButton")
+        self.save_button.pack(side="right")
+        ttk.Button(button_frame, text="Cancel", command=self.destroy).pack(side="right", padx=10)
+
+
         # --- WIDGETS ---
         # --- Step Type Selection ---
         step_type_frame = ttk.LabelFrame(content_frame, text="Step Type", padding="10")
@@ -181,15 +189,6 @@ class StepEditor(tk.Toplevel):
 
         # --- UI for Wait Step Frame ---
         self.build_wait_step_ui(self.wait_step_frame)
-
-        # --- Validation Summary ---
-        self.validation_summary_label = ttk.Label(button_frame, text="✓ Looks good!", anchor="w", foreground="green")
-        self.validation_summary_label.pack(side="left", padx=10, fill="x", expand=True)
-
-        # --- Save/Cancel Buttons (parented to button_frame) ---
-        ttk.Button(button_frame, text="Cancel", command=self.destroy).pack(side="right", padx=10)
-        self.save_button = ttk.Button(button_frame, text="Save Step", command=self.on_save, style="Accent.TButton")
-        self.save_button.pack(side="right")
 
         self.on_step_type_change() # Set initial view
         self.bind_validation_traces()
