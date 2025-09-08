@@ -145,22 +145,36 @@ class App(tk.Tk):
         list_container.columnconfigure(0, weight=1)
         list_container.rowconfigure(0, weight=1)
 
-        self.sequence_listbox = tk.Listbox(list_container, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT, height=10)
+        self.sequence_listbox = tk.Listbox(
+            list_container,
+            bg=self.widget_bg_color,
+            fg=self.text_color,
+            relief=tk.FLAT,
+            height=10,
+            selectbackground=self.accent_color,    # Green selection
+            selectforeground=self.bg_color,        # Dark text on green
+            activestyle='none',                    # Remove default active style
+            borderwidth=0,                         # Remove border
+            highlightthickness=1,                  # Add subtle highlight
+            highlightcolor=self.accent_color,      # Green highlight on focus
+            highlightbackground=self.widget_bg_color,
+            font=self.font_manager.fonts["primary"]  # Use consistent font
+        )
         self.sequence_listbox.grid(row=0, column=0, sticky="nsew")
         self.sequence_listbox.bind("<<ListboxSelect>>", self.on_sequence_select)
 
         seq_button_frame = ttk.Frame(list_container)
         seq_button_frame.grid(row=0, column=1, sticky="ns", padx=(5,0))
         self.add_step_button = ttk.Button(seq_button_frame, text="Add", command=self.add_step, state=tk.DISABLED)
-        self.add_step_button.pack(pady=2, fill="x")
+        self.add_step_button.pack(pady=3, fill="x", padx=2)
         self.edit_step_button = ttk.Button(seq_button_frame, text="Edit", command=self.edit_step, state=tk.DISABLED)
-        self.edit_step_button.pack(pady=2, fill="x")
+        self.edit_step_button.pack(pady=3, fill="x", padx=2)
         self.move_up_button = ttk.Button(seq_button_frame, text="Move Up", command=self.move_step_up, state=tk.DISABLED)
-        self.move_up_button.pack(pady=2, fill="x")
+        self.move_up_button.pack(pady=3, fill="x", padx=2)
         self.move_down_button = ttk.Button(seq_button_frame, text="Move Down", command=self.move_step_down, state=tk.DISABLED)
-        self.move_down_button.pack(pady=2, fill="x")
+        self.move_down_button.pack(pady=3, fill="x", padx=2)
         self.remove_step_button = ttk.Button(seq_button_frame, text="Remove", command=self.remove_step, state=tk.DISABLED)
-        self.remove_step_button.pack(pady=2, fill="x")
+        self.remove_step_button.pack(pady=3, fill="x", padx=2)
 
         # --- Final Controls ---
         controls_frame = ttk.LabelFrame(main_tab, text="Global Target", padding="10")
@@ -315,6 +329,7 @@ class App(tk.Tk):
         self.bg_color = colors['bg_color']
         self.widget_bg_color = colors['widget_bg_color']
         self.text_color = colors['text_color']
+        self.accent_color = colors['accent_color']
         self.button_color = colors['button_color']
         self.button_text_color = colors['button_text_color']
 
@@ -858,11 +873,40 @@ class App(tk.Tk):
             # self.notebook.select(self.main_tab)
 
     def format_step_for_display(self, number, step):
-        """Helper function to format a single step dictionary into a readable string."""
+        """Enhanced step formatting with visual indicators"""
         step_type = step.get('step_type', 'simple')
         action_type = step.get('action_type')
-        text = f"{number}: "
 
+        # Add visual indicators
+        icon = "❓" # Default icon
+        if step_type == 'simple':
+            if action_type == 'Click':
+                icon = "🖱️"
+            elif action_type == 'Type':
+                icon = "⌨️"
+            elif action_type == 'Set Variable':
+                icon = "📝"
+            elif action_type == 'Modify Variable':
+                 icon = "📝" # Also fits here
+            elif action_type == 'OCR':
+                icon = "👁️"
+            else:
+                icon = "⚡" # For other simple actions like Find Image, etc.
+        elif step_type == 'conditional_loop':
+            icon = "🔄"
+        elif step_type == 'loop':
+            icon = "🔄"
+        elif step_type == 'time_based_condition':
+            icon = "⏱️"
+        elif step_type == 'wait':
+            icon = "⏱️"
+        elif step_type == 'conditional_branch':
+            icon = "🔀"
+
+        # Format with icon and better spacing
+        text = f"  {icon} {number}: "
+
+        # Existing formatting logic
         if step_type == 'simple':
             if action_type == 'Set Variable':
                 params = step.get('action_params', {})
