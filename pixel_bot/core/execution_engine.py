@@ -12,38 +12,34 @@ from ..utils.automation import (click_and_drag, click_at, press_key_combination,
 from ..utils.image_analyzer import (extract_text_from_image, find_color,
                                     find_image)
 from ..utils.screen_capture import capture_screen
+from .script_validator import ScriptValidator
 
 
 class ExecutionEngine:
     def __init__(self, app):
         self.app = app
         self.variable_manager = self.app.variable_manager
-
-    def validate_step_config(self, step):
-        """Validate step configuration before execution"""
-        required_fields = {
-            'simple': ['detection_mode', 'action_type'],
-            'loop': ['loop_mode'],
-            'conditional_branch': ['condition']
-        }
-
-        step_type = step.get('step_type', 'simple')
-        for field in required_fields.get(step_type, []):
-            if field not in step:
-                raise ValueError(f"Missing required field '{field}' in {step_type} step")
+        self.validator = ScriptValidator()
 
     def validate_sequence(self, sequence):
-        """Validate entire sequence before execution"""
-        errors = []
+        """
+        Validates the entire sequence using the ScriptValidator.
+        Raises a ValueError if any critical errors are found.
+        """
+        validation_result = self.validator.validate_sequence(sequence)
+        if not validation_result.is_valid:
+            # Format the errors for display in a messagebox or log
+            error_message = "Sequence validation failed with critical errors:\n\n" + "\n".join(validation_result.errors)
+            # We can also log warnings here if we want
+            if validation_result.warnings:
+                logging.warning("Validation warnings found:\n" + "\n".join(validation_result.warnings))
+            raise ValueError(error_message)
 
-        for i, step in enumerate(sequence):
-            try:
-                self.validate_step_config(step)
-            except ValueError as e:
-                errors.append(f"Step {i+1}: {e}")
-
-        if errors:
-            raise ValueError("Sequence validation failed:\n" + "\n".join(errors))
+        # Log warnings even if the sequence is valid enough to run
+        if validation_result.warnings:
+            logging.warning("Sequence has validation warnings. Execution will proceed, but check these issues:")
+            for warning in validation_result.warnings:
+                logging.warning(f"- {warning}")
 
     def load_template_image(self, path):
         if not os.path.isabs(path):

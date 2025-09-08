@@ -7,6 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 import cv2
 
 # App is imported locally in __init__ to avoid circular dependency.
+from ..core.script_validator import ScriptValidator
 from .dialogs import RegionSelector, ColorSampler, ScreenshotTaker
 from .window_selector import WindowSelector
 
@@ -17,6 +18,7 @@ class StepEditor(tk.Toplevel):
         from pixel_bot.gui.main_window import App
 
         self.master = master # This is the App instance
+        self.validator = ScriptValidator()
         self.step_data = step_data if step_data else {}
         self.index = index
         self.target_sequence_list = target_sequence_list
@@ -180,11 +182,203 @@ class StepEditor(tk.Toplevel):
         # --- UI for Wait Step Frame ---
         self.build_wait_step_ui(self.wait_step_frame)
 
+        # --- Validation Summary ---
+        self.validation_summary_label = ttk.Label(button_frame, text="✓ Looks good!", anchor="w", foreground="green")
+        self.validation_summary_label.pack(side="left", padx=10, fill="x", expand=True)
+
         # --- Save/Cancel Buttons (parented to button_frame) ---
         ttk.Button(button_frame, text="Cancel", command=self.destroy).pack(side="right", padx=10)
-        ttk.Button(button_frame, text="Save Step", command=self.on_save, style="Accent.TButton").pack(side="right")
+        self.save_button = ttk.Button(button_frame, text="Save Step", command=self.on_save, style="Accent.TButton")
+        self.save_button.pack(side="right")
 
         self.on_step_type_change() # Set initial view
+        self.bind_validation_traces()
+        self.run_step_validation() # Initial validation check
+
+    def bind_validation_traces(self):
+        """Binds a callback to all tk.StringVars to trigger validation on change."""
+        vars_to_trace = [
+            self.step_type, self.wait_duration, self.detection_mode, self.action_type,
+            self.simple_click_offset_x, self.simple_click_offset_y, self.text_to_type,
+            self.key_combo_text, self.variable_name, self.variable_value,
+            self.modify_variable_name, self.modify_variable_operation, self.modify_variable_value,
+            self.output_variable_name, self.scroll_direction, self.scroll_amount,
+            self.target_window_title, self.max_retries, self.fallback_action_type,
+            self.fallback_drag_offset_x, self.fallback_drag_offset_y, self.if_variable,
+            self.if_operator, self.if_value, self.loop_mode, self.loop_repeat_count,
+            self.loop_max_retries, self.time_condition_hour, self.time_condition_minute,
+            self.wait_type, self.fixed_wait, self.min_wait, self.max_wait,
+            self.on_failure_policy, self.on_failure_retries
+        ]
+        for var in vars_to_trace:
+            var.trace_add('write', self.run_step_validation_callback)
+
+    def run_step_validation_callback(self, *args):
+        """Callback for tk.StringVar traces."""
+        self.run_step_validation()
+
+    def run_step_validation(self):
+        """Constructs a step from the UI and runs validation on it."""
+        step_data = self._build_current_step()
+        result = self.validator.validate_step(step_data)
+
+        self.update_validation_summary(result)
+
+    def update_validation_summary(self, result):
+        """Updates the summary label based on the validation result."""
+        if not result.is_valid:
+            self.validation_summary_label.config(text=f"✗ Error: {result.errors[0]}", foreground="red")
+            self.save_button.config(state=tk.DISABLED)
+        elif result.warnings:
+            self.validation_summary_label.config(text=f"⚠ Warning: {result.warnings[0]}", foreground="orange")
+            self.save_button.config(state=tk.NORMAL)
+        else:
+            self.validation_summary_label.config(text="✓ Looks good!", foreground="green")
+            self.save_button.config(state=tk.NORMAL)
+
+    def _build_current_step(self):
+        """
+        Constructs and returns a step dictionary from the current state of the UI.
+        This is a snapshot of what would be saved. It's designed to be error-tolerant.
+        """
+        step = {"step_type": self.step_type.get()}
+
+        try:
+            step_type = step['step_type']
+            if step_type == 'simple':
+                step.update({
+                    "window_title": self.target_window_title.get(),
+                    "detection_mode": self.detection_mode.get(),
+                    "action_type": self.action_type.get(),
+                    "action_params": {},
+                    "search_region": self.search_region,
+                })
+                if step['detection_mode'] == 'Color':
+                    step['detection_target'] = self.target_color_bgr
+                else: # Image
+                    step['detection_target'] = [os.path.join("templates", name) for name in self.image_listbox.get(0, tk.END)]
+
+                action_type = step['action_type']
+                if action_type == 'Type':
+                    step['action_params']['text'] = self.text_to_type.get()
+                elif action_type == 'Set Variable':
+                    step['action_params']['variable_name'] = self.variable_name.get()
+                    step['action_params']['variable_value'] = self.variable_value.get()
+                # This is not a full representation, but good enough for live validation of key fields
+
+            elif step_type == 'wait':
+                step['duration'] = self.wait_duration.get()
+
+            elif step_type == 'loop':
+                 step.update({
+                    "loop_mode": self.loop_mode.get(),
+                    "loop_actions": self.loop_actions,
+                    "window_title": self.target_window_title.get(),
+                })
+                 if step['loop_mode'] == 'repeat':
+                    step['loop_repeat_count'] = self.loop_repeat_count.get()
+                 else: # until
+                    step['loop_condition_target'] = [os.path.join("templates", name) for name in self.until_image_listbox.get(0, tk.END)]
+            # Add other step types as needed for comprehensive validation
+        except (ValueError, tk.TclError):
+            # This catches errors if a widget is destroyed while we're trying to get its value
+            pass
+
+        return step
+
+    def select_window(self):
+        WindowSelector(self, is_splash=False)
+
+    def on_window_selected(self, title):
+        self.target_window_title.set(title)
+        logging.info(f"Step editor window target set to: {title}")
+        self.run_step_validation()
+
+    def sample_color(self):
+        sampler = ColorSampler(self)
+        self.wait_window(sampler)
+        self.grab_set() # Re-grab focus
+
+    def on_color_sampled(self, bgr_color):
+        self.target_color_bgr = bgr_color
+        hex_color = self.app._bgr_to_hex(bgr_color)
+        self.color_preview.config(bg=hex_color)
+        logging.info(f"Step color changed to {hex_color}")
+        self.run_step_validation()
+
+    def take_screenshot(self):
+        taker = ScreenshotTaker(self)
+        self.wait_window(taker)
+        self.grab_set() # Re-grab focus
+
+    def on_screenshot_taken(self, image):
+        logging.info("Screenshot captured for step.")
+        filepath = filedialog.asksaveasfilename(
+            parent=self,
+            initialdir="templates",
+            title="Save Template",
+            filetypes=(("PNG files", "*.png"),),
+            defaultextension=".png"
+        )
+        if filepath:
+            try:
+                cv2.imwrite(filepath, image)
+                logging.info(f"Template saved to {filepath}")
+                self.image_listbox.insert(tk.END, os.path.basename(filepath))
+            except Exception as e:
+                logging.error(f"Error saving template: {e}")
+        self.focus_set()
+        self.grab_set()
+        self.run_step_validation()
+
+    def set_search_region(self):
+        logging.info("Opening region selector...")
+        selector = RegionSelector(self, self.on_region_selected)
+        self.wait_window(selector)
+        self.grab_set()
+
+    def on_region_selected(self, region):
+        try:
+            target_window_title = self.target_window_title.get()
+            if target_window_title and target_window_title != "(None Selected)":
+                target_windows = gw.getWindowsWithTitle(target_window_title)
+                if target_windows:
+                    win = target_windows[0]
+                    region['x'] -= win.left
+                    region['y'] -= win.top
+                    logging.info(f"Region coordinates adjusted to be relative to window '{win.title}'.")
+        except Exception as e:
+            logging.warning(f"Could not adjust region to window: {e}. Using absolute coordinates.")
+        self.search_region = region
+        self.search_region_label_var.set(self._get_region_display_text())
+        logging.info(f"Search region set.")
+        self.run_step_validation()
+
+    def clear_search_region(self):
+        self.search_region = None
+        self.search_region_label_var.set(self._get_region_display_text())
+        logging.info("Search region has been cleared.")
+        self.run_step_validation()
+
+    def _add_image_template_to_listbox(self, listbox):
+        filepaths = filedialog.askopenfilenames(
+            parent=self,
+            initialdir="templates",
+            title="Select Image Templates",
+            filetypes=(("PNG files", "*.png"), ("All files", "*.*"))
+        )
+        if filepaths:
+            for filepath in filepaths:
+                filename = os.path.basename(filepath)
+                if filename not in listbox.get(0, tk.END):
+                    listbox.insert(tk.END, filename)
+        self.run_step_validation()
+
+    def _remove_image_template_from_listbox(self, listbox):
+        selected_indices = listbox.curselection()
+        for i in sorted(selected_indices, reverse=True):
+            listbox.delete(i)
+        self.run_step_validation()
 
     def build_simple_action_ui(self, parent_frame):
         # This function builds the UI for a simple action, parented to the given frame.
@@ -732,6 +926,7 @@ class StepEditor(tk.Toplevel):
         ttk.Entry(wait_frame, textvariable=self.wait_duration, width=10).pack(side="left", padx=5)
 
     def on_step_type_change(self):
+        self.run_step_validation()
         step_type = self.step_type.get()
         # Hide all frames first
         self.simple_action_frame.grid_remove()
@@ -755,6 +950,7 @@ class StepEditor(tk.Toplevel):
             self.conditional_loop_frame.grid(row=1, column=0, sticky="ew")
 
     def on_mode_change(self):
+        self.run_step_validation()
         if self.detection_mode.get() == "Color":
             self.image_frame.grid_remove()
             self.color_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 10))
@@ -763,6 +959,7 @@ class StepEditor(tk.Toplevel):
             self.image_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 10))
 
     def on_action_change(self):
+        self.run_step_validation()
         action = self.action_type.get()
 
         # Hide all action-specific frames first

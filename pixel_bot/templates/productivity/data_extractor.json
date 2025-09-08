@@ -1,0 +1,23 @@
+[
+    {
+        "step_type": "simple",
+        "window_title": "CHANGE_ME",
+        "action_type": "OCR",
+        "action_params": {
+            "output_variable_name": "extracted_data",
+            "ocr_region": { "x": 100, "y": 100, "width": 300, "height": 50 }
+        },
+        "detection_mode": "Unconditional",
+        "wait_params": { "type": "Fixed", "fixed_time": 1.0 }
+    },
+    {
+        "step_type": "simple",
+        "window_title": "CHANGE_ME",
+        "detection_mode": "Unconditional",
+        "action_type": "Type",
+        "action_params": {
+            "text": "Extracted text was: {extracted_data}"
+        },
+        "wait_params": { "type": "None" }
+    }
+]
