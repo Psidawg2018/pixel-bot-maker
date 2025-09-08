@@ -497,13 +497,14 @@ class StepEditor(tk.Toplevel):
 
         self.on_mode_change()
         self.on_action_change()
-        self._build_on_failure_ui(parent_frame).grid(row=5, column=0, columnspan=2, sticky="ew", pady=(0, 10))
-        self._build_wait_ui(parent_frame).grid(row=6, column=0, columnspan=2, sticky="ew")
+        self._build_on_failure_ui(parent_frame).grid(row=8, column=0, columnspan=2, sticky="ew")
+        self._build_wait_ui(parent_frame).grid(row=9, column=0, columnspan=2, sticky="ew")
 
     def _build_on_failure_ui(self, parent_frame):
-        ttk.Label(parent_frame, text="On Failure", style='Heading.TLabel').grid(row=8, column=0, columnspan=2, sticky="w", pady=(0, 5))
-        on_failure_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
-        on_failure_frame.grid(row=9, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
+        container = tk.Frame(parent_frame, bg=self.app.bg_color)
+        ttk.Label(container, text="On Failure", style='Heading.TLabel').pack(anchor="w", pady=(0, 5))
+        on_failure_frame = tk.Frame(container, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        on_failure_frame.pack(fill="x", pady=(0, 10), ipady=5, ipadx=5)
 
         # --- Policy ---
         policy_frame = tk.Frame(on_failure_frame, bg=self.app.widget_bg_color)
@@ -520,7 +521,7 @@ class StepEditor(tk.Toplevel):
         self.retries_entry.pack(side="left")
 
         self.on_failure_policy_change() # Set initial visibility
-        return on_failure_frame
+        return container
 
     def on_failure_policy_change(self):
         if self.on_failure_policy.get() == "Retry":
@@ -1026,9 +1027,10 @@ class StepEditor(tk.Toplevel):
             self.fallback_target_frame.pack(fill="x")
 
     def _build_wait_ui(self, parent_frame):
-        ttk.Label(parent_frame, text="Post-Action Wait", style='Heading.TLabel').grid(row=10, column=0, columnspan=2, sticky="w", pady=(0, 5))
-        wait_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
-        wait_frame.grid(row=11, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
+        container = tk.Frame(parent_frame, bg=self.app.bg_color)
+        ttk.Label(container, text="Post-Action Wait", style='Heading.TLabel').pack(anchor="w", pady=(0, 5))
+        wait_frame = tk.Frame(container, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        wait_frame.pack(fill="x", pady=(0, 10), ipady=5, ipadx=5)
 
         # --- Wait Type ---
         wait_type_frame = tk.Frame(wait_frame, bg=self.app.widget_bg_color)
@@ -1050,7 +1052,7 @@ class StepEditor(tk.Toplevel):
         ttk.Entry(self.random_wait_frame, textvariable=self.max_wait, width=7).pack(side="left")
 
         self.on_wait_type_change() # Set initial visibility
-        return wait_frame
+        return container
 
     def on_wait_type_change(self):
         wait_type = self.wait_type.get()
