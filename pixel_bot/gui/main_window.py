@@ -404,6 +404,11 @@ class App(tk.Tk):
         self.accent_color = colors['accent_color']
         self.button_color = colors['button_color']
         self.button_text_color = colors['button_text_color']
+        self.card_header = colors['card_header']
+        self.border_color = colors['border_color']
+        self.text_secondary = colors['text_secondary']
+        self.warning_color = colors['warning_color']
+        self.danger_color = colors['danger_color']
 
     def _apply_custom_styles(self):
         theme = self.settings_manager.get_setting('theme')
