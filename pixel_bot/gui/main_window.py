@@ -29,12 +29,17 @@ class App(tk.Tk):
 
         # --- Color Theme ---
         self.sleek_blue_theme = {
-            "bg_color": "#1a1625",           # Changed from #0A192F
-            "widget_bg_color": "#252339",    # Changed from #1E3A5F
-            "text_color": "#e2e8f0",        # Changed from #E6F1FF
-            "accent_color": "#10b981",       # Changed from #64FFDA
-            "button_color": "#3b82f6",       # Changed from #007BFF
-            "button_text_color": "#ffffff"   # Keep same
+            "bg_color": "#1a1a1a",           # Main background (darker)
+            "widget_bg_color": "#2d2d2d",    # Card backgrounds
+            "card_header": "#353535",        # Card title bars
+            "border_color": "#404040",       # Subtle borders
+            "text_color": "#ffffff",         # Primary text
+            "text_secondary": "#cccccc",     # Secondary text
+            "accent_color": "#00d4aa",       # Green accent (success)
+            "button_color": "#4a9eff",       # Blue buttons
+            "warning_color": "#ffa500",      # Orange warnings
+            "danger_color": "#ff4757",       # Red danger
+            "button_text_color": "#ffffff"
         }
         # For now, we'll just have one theme. We can add a light theme later if needed.
         self.dark_theme = self.sleek_blue_theme
@@ -66,27 +71,24 @@ class App(tk.Tk):
         self.template_map = {}
 
         # --- Main Layout Frames ---
-        main_frame = ttk.Frame(self, padding="10")
-        main_frame.pack(fill="both", expand=True)
-        main_frame.columnconfigure(0, weight=1, uniform="group1")
-        main_frame.columnconfigure(1, weight=1, uniform="group1")
-        main_frame.rowconfigure(0, weight=1)
+        main_frame = tk.Frame(self, bg=self.bg_color)
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
 
-        left_frame = ttk.Frame(main_frame)
-        left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        left_frame.rowconfigure(0, weight=1)
-        left_frame.columnconfigure(0, weight=1)
+        self.create_modern_header(main_frame)
 
-        right_frame = ttk.Frame(main_frame)
-        right_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        right_frame.rowconfigure(0, weight=1)
-        right_frame.columnconfigure(0, weight=1)
+        content_frame = tk.Frame(main_frame, bg=self.bg_color)
+        content_frame.pack(fill='both', expand=True, pady=(20, 0))
+
+        left_frame = tk.Frame(content_frame, bg=self.bg_color)
+        left_frame.pack(side='left', fill='both', expand=True, padx=(0, 10))
+
+        right_frame = tk.Frame(content_frame, bg=self.bg_color)
+        right_frame.pack(side='right', fill='both', expand=True, padx=(10, 0))
 
         # --- WIDGET CREATION (Right Panel) ---
-        self.log_area = scrolledtext.ScrolledText(right_frame, width=45, height=10, relief=tk.FLAT, insertbackground=self.text_color)
-        self.log_area.grid(row=0, column=0, sticky="nsew")
-        right_frame.rowconfigure(0, weight=1)
-        right_frame.columnconfigure(0, weight=1)
+        log_content = self.create_modern_card(right_frame, "📝 Log")
+        self.log_area = scrolledtext.ScrolledText(log_content, width=45, height=10, relief=tk.FLAT, insertbackground=self.text_color, bg=self.widget_bg_color, fg=self.text_color, bd=0, font=self.font_manager.fonts['mono'])
+        self.log_area.pack(fill='both', expand=True, padx=1, pady=1)
 
         # --- Logging Setup ---
         setup_logging(self.log_area)
@@ -108,197 +110,208 @@ class App(tk.Tk):
         self._apply_custom_styles()
 
 
-        notebook = ttk.Notebook(left_frame, style='TNotebook')
-        notebook.pack(expand=True, fill='both')
-
-        main_tab = ttk.Frame(notebook, padding="10")
-        templates_tab = ttk.Frame(notebook, padding="10")
-        settings_tab = ttk.Frame(notebook, padding="10")
-
-        notebook.add(main_tab, text='Main')
-        notebook.add(templates_tab, text='Templates')
-        notebook.add(settings_tab, text='Settings')
+        # The notebook is removed. Content will be placed directly in left_frame or right_frame.
+        # We create temporary frames to hold the content of the old tabs.
+        # This content will be moved into cards in the next phase.
+        templates_tab_content = tk.Frame(self) # Dummy parent for now
+        settings_tab_content = tk.Frame(self) # Dummy parent for now
 
 
-        # --- Main Tab Content ---
-        main_tab.columnconfigure(0, weight=1)
-        main_tab.rowconfigure(0, weight=3) # Make the sequence frame expandable
-        main_tab.rowconfigure(4, weight=2) # Make the validation frame expandable
-
+        # --- Main Tab Content (will be moved to cards) ---
+        # The content that was in main_tab will now be parented to left_frame or right_frame.
         # --- Templates Tab Content ---
-        self.setup_templates_tab(templates_tab)
+        self.setup_templates_tab(templates_tab_content)
 
-        # --- Sequence Editor UI ---
-        sequence_frame = ttk.LabelFrame(main_tab, text="Action Sequence", padding="10")
-        sequence_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
-        sequence_frame.columnconfigure(0, weight=1)
-        sequence_frame.rowconfigure(1, weight=1)
+        # --- Action Sequence Panel (Left Frame) ---
+        sequence_content = self.create_modern_card(left_frame, "⚡ Action Sequence")
 
         # Frame for Save/Load buttons
-        file_io_frame = ttk.Frame(sequence_frame)
-        file_io_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
-        ttk.Button(file_io_frame, text="Load Sequence", command=self.load_sequence).pack(side="left", padx=(0,5))
-        ttk.Button(file_io_frame, text="Save Sequence", command=self.save_sequence).pack(side="left")
+        file_io_frame = tk.Frame(sequence_content, bg=self.widget_bg_color)
+        file_io_frame.pack(fill="x", pady=5, padx=10)
+        self.create_modern_button(file_io_frame, "Load Sequence", self.load_sequence, self.button_color).pack(side="left", padx=(0,5))
+        self.create_modern_button(file_io_frame, "Save Sequence", self.save_sequence, self.button_color).pack(side="left")
 
-        list_container = ttk.Frame(sequence_frame)
-        list_container.grid(row=1, column=0, columnspan=2, sticky="nsew")
-        list_container.columnconfigure(0, weight=1)
-        list_container.rowconfigure(0, weight=1)
+        list_container = tk.Frame(sequence_content, bg=self.widget_bg_color)
+        list_container.pack(fill='both', expand=True, padx=10, pady=(0, 10))
+
+        # Scrollbar
+        scrollbar = tk.Scrollbar(list_container, relief='flat', troughcolor=self.widget_bg_color, bg=self.border_color, activebackground=self.card_header)
+        scrollbar.pack(side='right', fill='y')
 
         self.sequence_listbox = tk.Listbox(
             list_container,
-            bg=self.widget_bg_color,
+            bg=self.card_header, # Darker background like mockup
             fg=self.text_color,
             relief=tk.FLAT,
             height=10,
-            selectbackground=self.accent_color,    # Green selection
-            selectforeground=self.bg_color,        # Dark text on green
-            activestyle='none',                    # Remove default active style
-            borderwidth=0,                         # Remove border
-            highlightthickness=1,                  # Add subtle highlight
-            highlightcolor=self.accent_color,      # Green highlight on focus
-            highlightbackground=self.widget_bg_color,
-            font=self.font_manager.fonts["primary"]  # Use consistent font
+            selectbackground=self.accent_color,
+            selectforeground="#000000", # Black text on selection
+            activestyle='none',
+            borderwidth=0,
+            highlightthickness=0,
+            font=self.font_manager.fonts["primary"],
+            yscrollcommand=scrollbar.set
         )
-        self.sequence_listbox.grid(row=0, column=0, sticky="nsew")
+        self.sequence_listbox.pack(side='left', fill='both', expand=True)
+        scrollbar.config(command=self.sequence_listbox.yview)
+
         self.sequence_listbox.bind("<<ListboxSelect>>", self.on_sequence_select)
 
-        seq_button_frame = ttk.Frame(list_container)
-        seq_button_frame.grid(row=0, column=1, sticky="ns", padx=(5,0))
-        self.add_step_button = ttk.Button(seq_button_frame, text="Add", command=self.add_step, state=tk.DISABLED)
+        seq_button_frame = tk.Frame(list_container, bg=self.widget_bg_color)
+        seq_button_frame.pack(side='right', fill='y', padx=(5,0))
+        self.add_step_button = self.create_modern_button(seq_button_frame, "➕ Add", self.add_step, self.button_color)
         self.add_step_button.pack(pady=3, fill="x", padx=2)
-        self.edit_step_button = ttk.Button(seq_button_frame, text="Edit", command=self.edit_step, state=tk.DISABLED)
+        self.edit_step_button = self.create_modern_button(seq_button_frame, "✏️ Edit", self.edit_step, self.button_color)
         self.edit_step_button.pack(pady=3, fill="x", padx=2)
-        self.move_up_button = ttk.Button(seq_button_frame, text="Move Up", command=self.move_step_up, state=tk.DISABLED)
+        self.move_up_button = self.create_modern_button(seq_button_frame, "🔼 Up", self.move_up, self.button_color)
         self.move_up_button.pack(pady=3, fill="x", padx=2)
-        self.move_down_button = ttk.Button(seq_button_frame, text="Move Down", command=self.move_step_down, state=tk.DISABLED)
+        self.move_down_button = self.create_modern_button(seq_button_frame, "🔽 Down", self.move_down, self.button_color)
         self.move_down_button.pack(pady=3, fill="x", padx=2)
-        self.remove_step_button = ttk.Button(seq_button_frame, text="Remove", command=self.remove_step, state=tk.DISABLED)
+        self.remove_step_button = self.create_modern_button(seq_button_frame, "🗑️ Remove", self.remove_step, self.sleek_blue_theme['danger_color'])
         self.remove_step_button.pack(pady=3, fill="x", padx=2)
 
-        # --- Final Controls ---
-        controls_frame = ttk.LabelFrame(main_tab, text="Global Target", padding="10")
-        controls_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-        self.target_window_label = ttk.Label(controls_frame, textvariable=self.target_window_title, wraplength=380, justify="left", style="Card.TLabel")
-        self.target_window_label.pack(pady=5, fill="x", expand=True, ipady=5)
-        ttk.Button(controls_frame, text="Change Target Window", command=self.prompt_for_window_selection).pack(pady=(10,5))
+        # The state of these buttons is managed in on_sequence_select, which needs to be updated
+        # to handle tk.Button state. For now, I'll disable them manually after creation.
+        self.add_step_button.config(state=tk.DISABLED)
+        self.edit_step_button.config(state=tk.DISABLED)
+        self.move_up_button.config(state=tk.DISABLED)
+        self.move_down_button.config(state=tk.DISABLED)
+        self.remove_step_button.config(state=tk.DISABLED)
 
-        # --- Most Loaded Sequences ---
-        most_loaded_frame = ttk.LabelFrame(main_tab, text="Frequently Used", padding="10")
-        most_loaded_frame.grid(row=2, column=0, sticky="ew")
-        self.most_loaded_container = ttk.Frame(most_loaded_frame)
-        self.most_loaded_container.pack(fill="x", pady=5)
+        # --- Bot Controls Panel (Left Frame) ---
+        controls_content = self.create_modern_card(left_frame, "🎮 Bot Controls")
 
-        bot_controls_frame = ttk.Frame(main_tab)
-        bot_controls_frame.grid(row=3, column=0, sticky="ew", pady=(10, 0))
-        bot_controls_frame.columnconfigure(0, weight=1)
+        self.hide_window_check = tk.Checkbutton(controls_content, text="Hide window when bot is running",
+                                variable=self.hide_window_var,
+                                bg=self.widget_bg_color, fg=self.text_color,
+                                selectcolor=self.card_header,
+                                activebackground=self.widget_bg_color,
+                                activeforeground=self.text_color,
+                                font=self.font_manager.fonts["primary"],
+                                relief='flat', highlightthickness=0)
+        self.hide_window_check.pack(anchor='w', padx=15, pady=(10, 5))
 
-        self.hide_window_check = ttk.Checkbutton(bot_controls_frame, text="Hide window when bot is running", variable=self.hide_window_var)
-        self.hide_window_check.pack()
+        self.dry_run_check = tk.Checkbutton(controls_content, text="Dry Run (log actions without executing)",
+                               variable=self.dry_run_var,
+                               bg=self.widget_bg_color, fg=self.text_color,
+                               selectcolor=self.card_header,
+                               activebackground=self.widget_bg_color,
+                               activeforeground=self.text_color,
+                               font=self.font_manager.fonts["primary"],
+                               relief='flat', highlightthickness=0)
+        self.dry_run_check.pack(anchor='w', padx=15, pady=5)
 
-        self.dry_run_check = ttk.Checkbutton(bot_controls_frame, text="Dry Run (log actions without executing)", variable=self.dry_run_var)
-        self.dry_run_check.pack(pady=5)
+        self.start_button = self.create_modern_button(controls_content, "▶️ Start Bot", self.toggle_bot, self.sleek_blue_theme['accent_color'])
+        self.start_button.pack(pady=10, ipady=5, ipadx=10)
 
-        self.start_button = ttk.Button(bot_controls_frame, text="Start Bot", command=self.toggle_bot, style="Accent.TButton")
-        self.start_button.pack(pady=10)
 
-        # --- Validation Panel ---
-        validation_frame = ttk.LabelFrame(main_tab, text="Validation Results", padding="10")
-        validation_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
-        validation_frame.columnconfigure(0, weight=1)
-        validation_frame.rowconfigure(0, weight=1)
+        # --- Global Target Panel (Right Frame) ---
+        target_content = self.create_modern_card(right_frame, "🎯 Global Target")
+        self.target_window_label = ttk.Label(target_content, textvariable=self.target_window_title, wraplength=380, justify="left", style="Card.TLabel")
+        self.target_window_label.pack(pady=5, fill="x", expand=True, ipady=5, padx=15)
+        self.create_modern_button(target_content, "🔄 Change Target Window", self.prompt_for_window_selection, self.button_color).pack(pady=(10,5))
 
-        self.validation_tree = ttk.Treeview(validation_frame, height=7, columns=("Severity", "Description"), show="headings")
+        # --- Validation Panel (Right Frame) ---
+        validation_content = self.create_modern_card(right_frame, "✅ Validation Results")
+
+        tree_container = tk.Frame(validation_content, bg=self.widget_bg_color)
+        tree_container.pack(fill='both', expand=True, padx=15, pady=(10,0))
+
+        tree_scroll = ttk.Scrollbar(tree_container, orient='vertical')
+
+        self.validation_tree = ttk.Treeview(tree_container, height=7, columns=("Severity", "Description"), show="headings", yscrollcommand=tree_scroll.set)
+        tree_scroll.config(command=self.validation_tree.yview)
+
         self.validation_tree.heading("Severity", text="Severity")
         self.validation_tree.heading("Description", text="Description")
-        self.validation_tree.column("Severity", width=80, anchor='w')
-        self.validation_tree.column("Description", width=300, anchor='w')
-        self.validation_tree.grid(row=0, column=0, sticky="nsew", pady=(0,5))
+        self.validation_tree.column("Severity", width=100, minwidth=80)
+        self.validation_tree.column("Description", width=300, minwidth=200)
+
+        self.validation_tree.pack(side='left', fill='both', expand=True)
+        tree_scroll.pack(side='right', fill='y')
 
         # Add tags for coloring
-        self.validation_tree.tag_configure('error', foreground='red')
-        self.validation_tree.tag_configure('warning', foreground='orange')
-        self.validation_tree.tag_configure('suggestion', foreground='lightblue')
+        self.validation_tree.tag_configure('error', foreground=self.sleek_blue_theme['danger_color'])
+        self.validation_tree.tag_configure('warning', foreground=self.sleek_blue_theme['warning_color'])
+        self.validation_tree.tag_configure('suggestion', foreground=self.sleek_blue_theme['text_secondary'])
 
-        ttk.Button(validation_frame, text="Validate Sequence", command=self.run_full_validation).grid(row=1, column=0, sticky="w")
+        self.create_modern_button(validation_content, "🔍 Validate Sequence", self.run_full_validation, self.sleek_blue_theme['warning_color']).pack(pady=10)
 
-        # --- Settings Tab Content ---
-        settings_content_frame = ttk.Frame(settings_tab)
-        settings_content_frame.pack(fill="both", expand=True)
+        # --- Most Loaded Sequences (Left Frame) ---
+        most_loaded_content = self.create_modern_card(left_frame, "⭐ Frequently Used")
+        self.most_loaded_container = tk.Frame(most_loaded_content, bg=self.widget_bg_color)
+        self.most_loaded_container.pack(fill="x", expand=True, pady=5, padx=15)
+
+        # --- Templates Card (Right Frame) ---
+        templates_card_content = self.create_modern_card(right_frame, "📚 Templates")
+        self.setup_templates_tab(templates_card_content)
+
+        # --- Settings Card (Right Frame) ---
+        settings_card_content = self.create_modern_card(right_frame, "⚙️ Settings")
+
+        # The various settings are now created in sub-frames parented to the card's content area
+        settings_inner_frame = tk.Frame(settings_card_content, bg=self.widget_bg_color)
+        settings_inner_frame.pack(fill='both', expand=True, padx=15, pady=10)
 
         # --- General Settings ---
-        general_frame = ttk.LabelFrame(settings_content_frame, text="General", padding="10")
-        general_frame.pack(fill="x", pady=5, anchor="n")
-
+        ttk.Label(settings_inner_frame, text="General", font=self.font_manager.fonts["heading"]).pack(anchor="w", pady=(0, 5))
         self.hide_bot_default_var = tk.BooleanVar(value=self.settings_manager.get_setting('hide_bot_default'))
-        hide_bot_check = ttk.Checkbutton(general_frame, text="Hide window by default when bot is running", variable=self.hide_bot_default_var, command=self.save_hide_bot_default)
+        hide_bot_check = tk.Checkbutton(settings_inner_frame, text="Hide window by default when bot is running",
+                                        variable=self.hide_bot_default_var, command=self.save_hide_bot_default,
+                                        bg=self.widget_bg_color, fg=self.text_color,
+                                        selectcolor=self.card_header,
+                                        activebackground=self.widget_bg_color,
+                                        activeforeground=self.text_color,
+                                        font=self.font_manager.fonts["primary"],
+                                        relief='flat', highlightthickness=0)
         hide_bot_check.pack(anchor="w", padx=5, pady=2)
 
-        # --- Appearance Settings ---
-        # Theme selection is removed as we now have a single, unified theme.
-
         # --- Image Matching Settings ---
-        matching_frame = ttk.LabelFrame(settings_content_frame, text="Image Matching", padding="10")
-        matching_frame.pack(fill="x", pady=5, anchor="n")
-
+        ttk.Label(settings_inner_frame, text="Image Matching", font=self.font_manager.fonts["heading"]).pack(anchor="w", pady=(10, 5))
         self.similarity_threshold_var = tk.DoubleVar(value=self.settings_manager.get_setting('image_similarity_threshold'))
-
-        threshold_inner_frame = ttk.Frame(matching_frame)
+        threshold_inner_frame = tk.Frame(settings_inner_frame, bg=self.widget_bg_color)
         threshold_inner_frame.pack(fill="x", pady=2)
-
         ttk.Label(threshold_inner_frame, text="Similarity Threshold:").pack(side="left", padx=5)
         self.similarity_label_var = tk.StringVar(value=f"{self.similarity_threshold_var.get():.2f}")
         ttk.Label(threshold_inner_frame, textvariable=self.similarity_label_var, style="Card.TLabel", width=5).pack(side="left")
-
         similarity_slider = ttk.Scale(
-            threshold_inner_frame,
-            from_=0.0,
-            to=1.0,
-            orient=tk.HORIZONTAL,
-            variable=self.similarity_threshold_var,
-            command=self.save_similarity_threshold,
+            threshold_inner_frame, from_=0.0, to=1.0, orient=tk.HORIZONTAL,
+            variable=self.similarity_threshold_var, command=self.save_similarity_threshold,
         )
         similarity_slider.pack(side="left", fill="x", expand=True, padx=5)
 
-
         # --- Hotkey Settings ---
-        hotkey_frame = ttk.LabelFrame(settings_content_frame, text="Hotkey", padding="10")
-        hotkey_frame.pack(fill="x", pady=5, anchor="n")
-
-        hotkey_inner_frame = ttk.Frame(hotkey_frame)
+        ttk.Label(settings_inner_frame, text="Hotkey", font=self.font_manager.fonts["heading"]).pack(anchor="w", pady=(10, 5))
+        hotkey_inner_frame = tk.Frame(settings_inner_frame, bg=self.widget_bg_color)
         hotkey_inner_frame.pack(fill="x", pady=2)
         ttk.Label(hotkey_inner_frame, text="Start/Stop Hotkey:").pack(side="left", padx=5)
         self.hotkey_label_var = tk.StringVar(value=self.settings_manager.get_setting('hotkey'))
         ttk.Label(hotkey_inner_frame, textvariable=self.hotkey_label_var, style="Card.TLabel", padding=(10, 5), width=12, anchor="center").pack(side="left")
-        self.change_hotkey_button = ttk.Button(hotkey_inner_frame, text="Change...", command=self.change_hotkey)
+        self.change_hotkey_button = self.create_modern_button(hotkey_inner_frame, "Change...", self.change_hotkey, self.button_color)
         self.change_hotkey_button.pack(side="left", padx=5)
 
         # --- Default Wait Times UI ---
-        self.wait_frame = ttk.LabelFrame(settings_content_frame, text="Default Post-Action Wait", padding="10")
-        self.wait_frame.pack(fill="x", pady=5, anchor="n")
-
+        ttk.Label(settings_inner_frame, text="Default Post-Action Wait", font=self.font_manager.fonts["heading"]).pack(anchor="w", pady=(10, 5))
+        self.wait_frame = tk.Frame(settings_inner_frame, bg=self.widget_bg_color)
+        self.wait_frame.pack(fill="x", pady=2)
         default_wait_settings = self.settings_manager.get_setting('default_wait_times')
         self.default_wait_type = tk.StringVar(value=default_wait_settings.get('type', 'Fixed'))
         self.default_fixed_wait = tk.StringVar(value=str(default_wait_settings.get('fixed_time', 1)))
         self.default_min_wait = tk.StringVar(value=str(default_wait_settings.get('min_time', 1)))
         self.default_max_wait = tk.StringVar(value=str(default_wait_settings.get('max_time', 2)))
-
-        wait_type_frame = ttk.Frame(self.wait_frame)
+        wait_type_frame = tk.Frame(self.wait_frame, bg=self.widget_bg_color)
         ttk.Radiobutton(wait_type_frame, text="Fixed", variable=self.default_wait_type, value="Fixed", command=self.on_default_wait_type_change).pack(side="left")
         ttk.Radiobutton(wait_type_frame, text="Random", variable=self.default_wait_type, value="Random", command=self.on_default_wait_type_change).pack(side="left")
         wait_type_frame.pack(fill="x", pady=(0,5))
-
-        self.default_fixed_wait_frame = ttk.Frame(self.wait_frame)
+        self.default_fixed_wait_frame = tk.Frame(self.wait_frame, bg=self.widget_bg_color)
         ttk.Label(self.default_fixed_wait_frame, text="Default Fixed Wait (sec):").pack(side="left", padx=5)
         ttk.Entry(self.default_fixed_wait_frame, textvariable=self.default_fixed_wait, width=7).pack(side="left")
-
-        self.default_random_wait_frame = ttk.Frame(self.wait_frame)
+        self.default_random_wait_frame = tk.Frame(self.wait_frame, bg=self.widget_bg_color)
         ttk.Label(self.default_random_wait_frame, text="Min (sec):").pack(side="left", padx=5)
         ttk.Entry(self.default_random_wait_frame, textvariable=self.default_min_wait, width=7).pack(side="left")
         ttk.Label(self.default_random_wait_frame, text="Max (sec):").pack(side="left", padx=(10,5))
         ttk.Entry(self.default_random_wait_frame, textvariable=self.default_max_wait, width=7).pack(side="left")
-
-        ttk.Button(self.wait_frame, text="Save Default Waits", command=self.save_default_wait_times).pack(pady=(10,0))
+        self.create_modern_button(self.wait_frame, "Save Default Waits", self.save_default_wait_times, self.button_color).pack(pady=(10,0))
 
         self.on_default_wait_type_change()
 
@@ -315,6 +328,65 @@ class App(tk.Tk):
 
         self.start_persistent_hotkey_listener()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def create_modern_card(self, parent, title, height=None):
+        """Create a modern card-style container matching the mockup"""
+        card = tk.Frame(parent, bg=self.widget_bg_color, relief='flat', bd=0)
+        card.pack(fill='both', expand=True, pady=(0, 15))
+
+        # Add subtle border effect
+        border_frame = tk.Frame(card, bg=self.border_color, height=1)
+        border_frame.pack(fill='x', side='top')
+
+        # Title bar
+        title_frame = tk.Frame(card, bg=self.card_header, height=40)
+        title_frame.pack(fill='x', padx=1, pady=(1, 0))
+        title_frame.pack_propagate(False)
+
+        title_label = tk.Label(title_frame, text=title,
+                              bg=self.card_header, fg=self.text_color,
+                              font=self.font_manager.fonts["heading"])
+        title_label.pack(side='left', padx=15, pady=10)
+
+        # Content area
+        content_frame = tk.Frame(card, bg=self.widget_bg_color)
+        if height:
+            content_frame.configure(height=height)
+            content_frame.pack_propagate(False)
+        content_frame.pack(fill='both', expand=True, padx=1, pady=(0, 1))
+
+        return content_frame
+
+    def create_modern_button(self, parent, text, command, bg_color, width=None):
+        """Create a modern styled button matching the mockup"""
+        btn = tk.Button(parent, text=text, command=command,
+                       bg=bg_color, fg=self.button_text_color,
+                       relief='flat', font=self.font_manager.fonts["button"],
+                       cursor='hand2', activebackground=self.darken_color(bg_color))
+        if width:
+            btn.configure(width=width)
+        return btn
+
+    def darken_color(self, color):
+        """Darken colors for hover effects"""
+        color_map = {
+            '#00d4aa': '#00c499',  # Green
+            '#4a9eff': '#3a89ef',  # Blue
+            '#ffa500': '#e6940a',  # Orange
+            '#ff4757': '#e63946'   # Red
+        }
+        return color_map.get(color, color)
+
+    def create_modern_header(self, parent):
+        header_frame = tk.Frame(parent, bg=self.bg_color, height=60)
+        header_frame.pack(fill='x', pady=(0, 20))
+        header_frame.pack_propagate(False)
+
+        # App title with emoji
+        title_label = tk.Label(header_frame, text="🤖 Pixel Bot",
+                              bg=self.bg_color, fg=self.accent_color,
+                              font=('Segoe UI', 20, 'bold'))
+        title_label.pack(side='left', pady=15)
 
     def on_closing(self):
         logging.info("Closing application and stopping listener...")
@@ -361,8 +433,7 @@ class App(tk.Tk):
                 ('focus', colors['accent_color'])        # Focus border
             ])
 
-        self.style.configure('TCheckbutton', background=colors['bg_color'], foreground=colors['text_color'], font=fonts["primary"])
-        self.style.map('TCheckbutton', background=[('active', colors['bg_color'])])
+        # ttk.Checkbutton is no longer used, tk.Checkbutton is used instead for better styling.
         self.style.configure('TRadiobutton', background=colors['bg_color'], foreground=colors['text_color'], font=fonts["primary"])
         self.style.map('TRadiobutton', background=[('active', colors['bg_color'])])
 
@@ -389,38 +460,26 @@ class App(tk.Tk):
         # Special "Card" style for labels that need a background
         self.style.configure("Card.TLabel", background=colors['widget_bg_color'], relief=tk.SOLID, borderwidth=1, font=fonts["primary"])
 
-        # Accent Button (Start Bot)
-        self.style.configure("Accent.TButton",
-            background=colors['accent_color'],
-            foreground=colors['button_text_color'],     # Use existing white
-            font=self.font_manager.fonts["button"],
-            relief='flat',
-            borderwidth=0,
-            focuscolor='none')
-
-        self.style.map("Accent.TButton",
-            background=[
-                ('active', colors['button_color']),      # Hover to blue
-                ('pressed', colors['accent_color'])      # Keep same on press
-            ])
+        # Accent Button (Start Bot) is now handled by create_modern_button, so this style is removed.
 
         # Notebook styling
         self.style.configure('TNotebook', background=colors['bg_color'], borderwidth=0)
         self.style.configure('TNotebook.Tab', background=colors['bg_color'], foreground=colors['text_color'], padding=[10, 5], font=fonts["primary"])
         self.style.map('TNotebook.Tab', background=[('selected', colors['widget_bg_color'])], foreground=[('selected', colors['accent_color'])])
 
-        # Table/Treeview Styling (if applicable)
+        # Table/Treeview Styling
+        self.style.theme_use('clam')
         self.style.configure('Treeview',
-            background=colors['widget_bg_color'],
-            foreground=colors['text_color'],
-            fieldbackground=colors['widget_bg_color'],
-            relief='flat',
-            borderwidth=1)
-
+                       background=colors['widget_bg_color'],
+                       foreground=colors['text_color'],
+                       fieldbackground=colors['widget_bg_color'],
+                       borderwidth=0,
+                       relief='flat')
         self.style.configure('Treeview.Heading',
-            background=colors['bg_color'],              # Use main background
-            foreground=colors['text_color'],            # Use main text color
-            relief='flat')
+                       background=colors['border_color'],
+                       foreground=colors['text_color'],
+                       relief='flat')
+        self.style.map('Treeview.Heading', background=[('active', colors['card_header'])])
 
 
         # Apply background and foreground to the log area specifically
@@ -437,32 +496,32 @@ class App(tk.Tk):
 
     def on_window_selected(self, title):
         self.target_window_title.set(title)
-        self.add_step_button.state(['!disabled'])
+        self.add_step_button.config(state=tk.NORMAL)
         logging.info(f"Global target window set to: {title}")
 
     def on_sequence_select(self, event):
         selected_indices = self.sequence_listbox.curselection()
         if selected_indices:
             index = selected_indices[0]
-            self.edit_step_button.state(['!disabled'])
-            self.remove_step_button.state(['!disabled'])
+            self.edit_step_button.config(state=tk.NORMAL)
+            self.remove_step_button.config(state=tk.NORMAL)
 
             # Enable/disable Move Up button
             if index > 0:
-                self.move_up_button.state(['!disabled'])
+                self.move_up_button.config(state=tk.NORMAL)
             else:
-                self.move_up_button.state(['disabled'])
+                self.move_up_button.config(state=tk.DISABLED)
 
             # Enable/disable Move Down button
             if index < len(self.action_sequence) - 1:
-                self.move_down_button.state(['!disabled'])
+                self.move_down_button.config(state=tk.NORMAL)
             else:
-                self.move_down_button.state(['disabled'])
+                self.move_down_button.config(state=tk.DISABLED)
         else:
-            self.edit_step_button.state(['disabled'])
-            self.remove_step_button.state(['disabled'])
-            self.move_up_button.state(['disabled'])
-            self.move_down_button.state(['disabled'])
+            self.edit_step_button.config(state=tk.DISABLED)
+            self.remove_step_button.config(state=tk.DISABLED)
+            self.move_up_button.config(state=tk.DISABLED)
+            self.move_down_button.config(state=tk.DISABLED)
 
     def add_step(self):
         StepEditor(self)
@@ -739,35 +798,28 @@ class App(tk.Tk):
 
     def setup_templates_tab(self, parent_frame):
         parent_frame.columnconfigure(0, weight=1)
-        parent_frame.rowconfigure(0, weight=1)
+        parent_frame.rowconfigure(1, weight=1) # For the preview text
 
         # --- Treeview for categories and templates ---
-        gallery_frame = ttk.LabelFrame(parent_frame, text="Template Gallery", padding="10")
-        gallery_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
-        gallery_frame.columnconfigure(0, weight=1)
-        gallery_frame.rowconfigure(0, weight=1)
+        gallery_container = tk.Frame(parent_frame, bg=self.widget_bg_color)
+        gallery_container.pack(fill='both', expand=True, padx=15, pady=(10,0))
+        gallery_container.columnconfigure(0, weight=1)
+        gallery_container.rowconfigure(0, weight=1)
 
-        self.template_tree = ttk.Treeview(gallery_frame, show="tree headings", selectmode="browse")
+        self.template_tree = ttk.Treeview(gallery_container, show="tree headings", selectmode="browse", height=5)
         self.template_tree.heading("#0", text="Name", anchor='w')
         self.template_tree.grid(row=0, column=0, sticky="nsew")
         self.template_tree.bind("<<TreeviewSelect>>", self.on_template_selected)
 
         # --- Preview Panel ---
-        preview_frame = ttk.LabelFrame(parent_frame, text="Template Preview", padding="10")
-        preview_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
-        preview_frame.columnconfigure(0, weight=1)
-        preview_frame.rowconfigure(0, weight=1)
-
-        self.template_preview_text = scrolledtext.ScrolledText(preview_frame, height=8, wrap=tk.WORD, bg=self.widget_bg_color, fg=self.text_color, relief=tk.FLAT)
-        self.template_preview_text.grid(row=0, column=0, sticky="nsew")
+        self.template_preview_text = scrolledtext.ScrolledText(parent_frame, height=6, wrap=tk.WORD, bg=self.bg_color, fg=self.text_color, relief=tk.FLAT, bd=1)
+        self.template_preview_text.pack(fill='both', expand=True, padx=15, pady=10)
         self.template_preview_text.config(state=tk.DISABLED)
 
         # --- Controls ---
-        template_controls_frame = ttk.Frame(parent_frame)
-        template_controls_frame.grid(row=2, column=0, sticky="ew")
-
-        self.insert_template_button = ttk.Button(template_controls_frame, text="Insert Template into Sequence", command=self.insert_selected_template, state=tk.DISABLED)
-        self.insert_template_button.pack(pady=5)
+        self.insert_template_button = self.create_modern_button(parent_frame, "➕ Insert Template", self.insert_selected_template, self.sleek_blue_theme['accent_color'])
+        self.insert_template_button.pack(pady=(0, 10))
+        self.insert_template_button.config(state=tk.DISABLED)
 
         self.populate_template_treeview()
 
