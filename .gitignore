@@ -93,3 +93,4 @@ app.log
 # Ignore user-generated templates but keep the directory
 templates/*.png
 settings.json
+templates/test.json
