@@ -28,12 +28,12 @@ class App(tk.Tk):
 
         # --- Color Theme ---
         self.sleek_blue_theme = {
-            "bg_color": "#0A192F",  # Deep Navy
-            "widget_bg_color": "#1E3A5F", # Darker Blue-Gray
-            "text_color": "#E6F1FF",  # Soft White/Light Blue
-            "accent_color": "#64FFDA", # Electric Blue/Mint Green for accents
-            "button_color": "#007BFF", # A more standard blue for buttons
-            "button_text_color": "#FFFFFF"
+            "bg_color": "#1a1625",           # Changed from #0A192F
+            "widget_bg_color": "#252339",    # Changed from #1E3A5F
+            "text_color": "#e2e8f0",        # Changed from #E6F1FF
+            "accent_color": "#10b981",       # Changed from #64FFDA
+            "button_color": "#3b82f6",       # Changed from #007BFF
+            "button_text_color": "#ffffff"   # Keep same
         }
         # For now, we'll just have one theme. We can add a light theme later if needed.
         self.dark_theme = self.sleek_blue_theme
