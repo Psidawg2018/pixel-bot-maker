@@ -24,7 +24,7 @@ class App(tk.Tk):
         super().__init__()
         self.title("Pixel Bot")
         self.settings_manager = SettingsManager()
-        self.geometry("800x660")
+        self.geometry("1000x750")
 
         # --- Color Theme ---
         self.sleek_blue_theme = {
@@ -119,7 +119,8 @@ class App(tk.Tk):
 
         # --- Main Tab Content ---
         main_tab.columnconfigure(0, weight=1)
-        main_tab.rowconfigure(0, weight=1) # Make the sequence frame expandable
+        main_tab.rowconfigure(0, weight=3) # Make the sequence frame expandable
+        main_tab.rowconfigure(4, weight=2) # Make the validation frame expandable
 
         # --- Templates Tab Content ---
         self.setup_templates_tab(templates_tab)
@@ -188,8 +189,9 @@ class App(tk.Tk):
         validation_frame = ttk.LabelFrame(main_tab, text="Validation Results", padding="10")
         validation_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
         validation_frame.columnconfigure(0, weight=1)
+        validation_frame.rowconfigure(0, weight=1)
 
-        self.validation_tree = ttk.Treeview(validation_frame, height=5, columns=("Severity", "Description"), show="headings")
+        self.validation_tree = ttk.Treeview(validation_frame, height=7, columns=("Severity", "Description"), show="headings")
         self.validation_tree.heading("Severity", text="Severity")
         self.validation_tree.heading("Description", text="Description")
         self.validation_tree.column("Severity", width=80, anchor='w')
