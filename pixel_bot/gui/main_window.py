@@ -76,8 +76,31 @@ class App(tk.Tk):
 
         self.create_modern_header(main_frame)
 
-        content_frame = tk.Frame(main_frame, bg=self.bg_color)
-        content_frame.pack(fill='both', expand=True, pady=(20, 0))
+        # --- Scrollable Content Area ---
+        canvas_container = tk.Frame(main_frame, bg=self.bg_color)
+        canvas_container.pack(fill='both', expand=True, pady=(20, 0))
+
+        canvas = tk.Canvas(canvas_container, bg=self.bg_color, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(canvas_container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=self.bg_color)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        self.canvas = canvas # Save reference for scrolling
+
+        # The old content_frame is now the scrollable_frame
+        content_frame = scrollable_frame
 
         left_frame = tk.Frame(content_frame, bg=self.bg_color)
         left_frame.pack(side='left', fill='both', expand=True, padx=(0, 10))
@@ -243,11 +266,11 @@ class App(tk.Tk):
         self.most_loaded_container.pack(fill="x", expand=True, pady=5, padx=15)
 
         # --- Templates Card (Right Frame) ---
-        templates_card_content = self.create_modern_card(right_frame, "📚 Templates")
-        self.setup_templates_tab(templates_card_content)
+        self.templates_card_content = self.create_modern_card(right_frame, "📚 Templates")
+        self.setup_templates_tab(self.templates_card_content)
 
         # --- Settings Card (Right Frame) ---
-        settings_card_content = self.create_modern_card(right_frame, "⚙️ Settings")
+        self.settings_card_content = self.create_modern_card(right_frame, "⚙️ Settings")
 
         # The various settings are now created in sub-frames parented to the card's content area
         settings_inner_frame = tk.Frame(settings_card_content, bg=self.widget_bg_color)
@@ -377,6 +400,11 @@ class App(tk.Tk):
         }
         return color_map.get(color, color)
 
+    def scroll_to_widget(self, widget):
+        self.canvas.update_idletasks()
+        y = widget.winfo_y()
+        self.canvas.yview_moveto(y / self.canvas.winfo_height())
+
     def create_modern_header(self, parent):
         header_frame = tk.Frame(parent, bg=self.bg_color, height=60)
         header_frame.pack(fill='x', pady=(0, 20))
@@ -386,7 +414,14 @@ class App(tk.Tk):
         title_label = tk.Label(header_frame, text="🤖 Pixel Bot",
                               bg=self.bg_color, fg=self.accent_color,
                               font=('Segoe UI', 20, 'bold'))
-        title_label.pack(side='left', pady=15)
+        title_label.pack(side='left', pady=15, padx=20)
+
+        # Navigation buttons
+        nav_frame = tk.Frame(header_frame, bg=self.bg_color)
+        nav_frame.pack(side='right', pady=15, padx=20)
+
+        self.create_modern_button(nav_frame, 'Templates', lambda: self.scroll_to_widget(self.templates_card_content), self.widget_bg_color).pack(side='left', padx=10)
+        self.create_modern_button(nav_frame, 'Settings', lambda: self.scroll_to_widget(self.settings_card_content), self.widget_bg_color).pack(side='left')
 
     def on_closing(self):
         logging.info("Closing application and stopping listener...")

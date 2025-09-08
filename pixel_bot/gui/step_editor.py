@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 import cv2
+import pyautogui as gw
 
 # App is imported locally in __init__ to avoid circular dependency.
 from ..core.script_validator import ScriptValidator
@@ -128,16 +129,16 @@ class StepEditor(tk.Toplevel):
 
         # --- LAYOUT FRAMES ---
         # A bottom frame for buttons that never gets pushed out of view
-        button_frame = ttk.Frame(self)
+        button_frame = tk.Frame(self, bg=self.app.bg_color)
         button_frame.pack(side="bottom", fill="x", pady=10, padx=10)
 
         # A main content frame that can expand and scroll
-        content_frame = ttk.Frame(self, padding="10")
+        content_frame = tk.Frame(self, padding="10", bg=self.app.bg_color)
         content_frame.pack(side="top", fill="both", expand=True)
         content_frame.columnconfigure(0, weight=1)
 
         # --- Validation Summary & Save/Cancel Buttons (parented to button_frame) ---
-        self.validation_summary_label = ttk.Label(button_frame, text="✓ Looks good!", anchor="w", foreground="green")
+        self.validation_summary_label = ttk.Label(button_frame, text="✓ Looks good!", anchor="w", foreground="green", background=self.app.bg_color)
         self.validation_summary_label.pack(side="left", padx=10, fill="x", expand=True)
         self.app.create_modern_button(button_frame, "Cancel", self.destroy, self.app.button_color).pack(side="right", padx=10)
         self.save_button = self.app.create_modern_button(button_frame, "Save Step", self.on_save, self.app.accent_color)
@@ -149,29 +150,28 @@ class StepEditor(tk.Toplevel):
         ttk.Label(content_frame, text="Step Type", style='Heading.TLabel').grid(row=0, column=0, sticky="w", pady=(0, 5))
         step_type_frame = tk.Frame(content_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
         step_type_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
-        step_type_frame.columnconfigure(0, weight=1) # Allow radio buttons to space out
 
-        self.step_type_radios = {}
         step_types = [
-            ("Simple Action", "simple"),
-            ("Wait", "wait"),
-            ("If/Else", "conditional_branch"),
-            ("Loop", "loop"),
-            ("Time-based Condition", "time_based_condition"),
-            ("Conditional (Legacy)", "conditional_loop")
+            ("Simple Action", "simple"), ("Wait", "wait"), ("If/Else", "conditional_branch"),
+            ("Loop", "loop"), ("Time-based Condition", "time_based_condition"), ("Conditional (Legacy)", "conditional_loop")
         ]
+        self.step_type_radios = {}
         for i, (text, value) in enumerate(step_types):
-            radio = ttk.Radiobutton(step_type_frame, text=text, variable=self.step_type, value=value, command=self.on_step_type_change)
+            radio = tk.Radiobutton(step_type_frame, text=text, variable=self.step_type, value=value, command=self.on_step_type_change,
+                                   bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header,
+                                   activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color,
+                                   relief='flat', highlightthickness=0, anchor='w', justify='left')
             radio.grid(row=0, column=i, sticky="ew", padx=5)
+            step_type_frame.columnconfigure(i, weight=1)
             self.step_type_radios[value] = radio
 
         # --- Main Frames for each step type (parented to content_frame) ---
-        self.simple_action_frame = ttk.Frame(content_frame, padding="10")
-        self.conditional_loop_frame = ttk.Frame(content_frame, padding="10")
-        self.loop_frame = ttk.Frame(content_frame, padding="10")
-        self.conditional_branch_frame = ttk.Frame(content_frame, padding="10")
-        self.time_based_condition_frame = ttk.Frame(content_frame, padding="10")
-        self.wait_step_frame = ttk.Frame(content_frame, padding="10")
+        self.simple_action_frame = tk.Frame(content_frame, bg=self.app.bg_color, padding="10")
+        self.conditional_loop_frame = tk.Frame(content_frame, bg=self.app.bg_color, padding="10")
+        self.loop_frame = tk.Frame(content_frame, bg=self.app.bg_color, padding="10")
+        self.conditional_branch_frame = tk.Frame(content_frame, bg=self.app.bg_color, padding="10")
+        self.time_based_condition_frame = tk.Frame(content_frame, bg=self.app.bg_color, padding="10")
+        self.wait_step_frame = tk.Frame(content_frame, bg=self.app.bg_color, padding="10")
 
         # --- UI for Simple Action Frame ---
         self.build_simple_action_ui(self.simple_action_frame)
@@ -405,8 +405,14 @@ class StepEditor(tk.Toplevel):
         ttk.Label(parent_frame, text="3. Choose What to Look For", style='Heading.TLabel').grid(row=4, column=0, columnspan=2, sticky="w", pady=(0, 5))
         mode_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
         mode_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
-        ttk.Radiobutton(mode_frame, text="Color", variable=self.detection_mode, value="Color", command=self.on_mode_change).pack(anchor="w")
-        ttk.Radiobutton(mode_frame, text="Image", variable=self.detection_mode, value="Image", command=self.on_mode_change).pack(anchor="w")
+        tk.Radiobutton(mode_frame, text="Color", variable=self.detection_mode, value="Color", command=self.on_mode_change,
+                                   bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header,
+                                   activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color,
+                                   relief='flat', highlightthickness=0, anchor='w', justify='left').pack(anchor="w")
+        tk.Radiobutton(mode_frame, text="Image", variable=self.detection_mode, value="Image", command=self.on_mode_change,
+                                   bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header,
+                                   activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color,
+                                   relief='flat', highlightthickness=0, anchor='w', justify='left').pack(anchor="w")
 
         self.color_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color)
         self.image_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color)
@@ -437,7 +443,10 @@ class StepEditor(tk.Toplevel):
         action_frame.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
         action_types = ["Click", "Right-click", "Click with Offset", "Type", "Key Combo", "Scroll", "Set Variable", "Modify Variable", "OCR"]
         for i, action in enumerate(action_types):
-            ttk.Radiobutton(action_frame, text=action, variable=self.action_type, value=action, command=self.on_action_change).grid(row=i, column=0, sticky="w")
+            tk.Radiobutton(action_frame, text=action, variable=self.action_type, value=action, command=self.on_action_change,
+                                   bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header,
+                                   activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color,
+                                   relief='flat', highlightthickness=0, anchor='w', justify='left').grid(row=i, column=0, sticky="w")
 
         self.type_entry_frame = tk.Frame(action_frame, bg=self.app.widget_bg_color)
         self.type_entry = ttk.Entry(self.type_entry_frame, textvariable=self.text_to_type)
@@ -497,8 +506,8 @@ class StepEditor(tk.Toplevel):
 
         self.on_mode_change()
         self.on_action_change()
-        self._build_on_failure_ui(parent_frame).grid(row=8, column=0, columnspan=2, sticky="ew")
-        self._build_wait_ui(parent_frame).grid(row=9, column=0, columnspan=2, sticky="ew")
+        self._build_on_failure_ui_grid(parent_frame, row=8)
+        self._build_wait_ui_grid(parent_frame, row=10)
 
     def _build_on_failure_ui(self, parent_frame):
         container = tk.Frame(parent_frame, bg=self.app.bg_color)
@@ -509,9 +518,9 @@ class StepEditor(tk.Toplevel):
         # --- Policy ---
         policy_frame = tk.Frame(on_failure_frame, bg=self.app.widget_bg_color)
         ttk.Label(policy_frame, text="Action on Failure:", background=self.app.widget_bg_color).pack(side="left", padx=(0,10))
-        ttk.Radiobutton(policy_frame, text="Stop Bot", variable=self.on_failure_policy, value="Stop", command=self.on_failure_policy_change).pack(side="left")
-        ttk.Radiobutton(policy_frame, text="Skip Step", variable=self.on_failure_policy, value="Skip", command=self.on_failure_policy_change).pack(side="left")
-        ttk.Radiobutton(policy_frame, text="Retry Step", variable=self.on_failure_policy, value="Retry", command=self.on_failure_policy_change).pack(side="left")
+        tk.Radiobutton(policy_frame, text="Stop Bot", variable=self.on_failure_policy, value="Stop", command=self.on_failure_policy_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(policy_frame, text="Skip Step", variable=self.on_failure_policy, value="Skip", command=self.on_failure_policy_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(policy_frame, text="Retry Step", variable=self.on_failure_policy, value="Retry", command=self.on_failure_policy_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
         policy_frame.pack(fill="x", pady=(0,5))
 
         # --- Retries Frame ---
@@ -561,10 +570,10 @@ class StepEditor(tk.Toplevel):
         # --- Fallback Action Type ---
         fallback_action_type_frame = tk.Frame(fallback_action_frame, bg=self.app.widget_bg_color)
         ttk.Label(fallback_action_type_frame, text="Action:", background=self.app.widget_bg_color).pack(side="left", pady=2, padx=5)
-        ttk.Radiobutton(fallback_action_type_frame, text="Click", variable=self.fallback_action_type, value="Click", command=self.on_fallback_action_change).pack(side="left")
-        ttk.Radiobutton(fallback_action_type_frame, text="Click with Offset", variable=self.fallback_action_type, value="Click with Offset", command=self.on_fallback_action_change).pack(side="left")
-        ttk.Radiobutton(fallback_action_type_frame, text="Click and Drag", variable=self.fallback_action_type, value="Click and Drag", command=self.on_fallback_action_change).pack(side="left")
-        ttk.Radiobutton(fallback_action_type_frame, text="Do Nothing", variable=self.fallback_action_type, value="Do Nothing", command=self.on_fallback_action_change).pack(side="left")
+        tk.Radiobutton(fallback_action_type_frame, text="Click", variable=self.fallback_action_type, value="Click", command=self.on_fallback_action_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(fallback_action_type_frame, text="Click with Offset", variable=self.fallback_action_type, value="Click with Offset", command=self.on_fallback_action_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(fallback_action_type_frame, text="Click and Drag", variable=self.fallback_action_type, value="Click and Drag", command=self.on_fallback_action_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(fallback_action_type_frame, text="Do Nothing", variable=self.fallback_action_type, value="Do Nothing", command=self.on_fallback_action_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
         fallback_action_type_frame.pack(fill="x")
 
         # --- Fallback Action Params ---
@@ -598,7 +607,7 @@ class StepEditor(tk.Toplevel):
         self._update_primary_image_listbox()
         self._update_fallback_image_listbox()
         self.on_fallback_action_change()
-        self._build_wait_ui(parent_frame).pack(pady=10, padx=10, fill="x")
+        self._build_wait_ui_pack(parent_frame).pack(pady=10, padx=10, fill="x")
 
     def _update_primary_image_listbox(self):
         primary_target = self.step_data.get('primary_target', {})
@@ -609,8 +618,8 @@ class StepEditor(tk.Toplevel):
         ttk.Label(parent_frame, text="Loop Mode", style='Heading.TLabel').pack(anchor="w", padx=10)
         loop_mode_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
         loop_mode_frame.pack(pady=5, padx=10, fill="x", ipady=5, ipadx=5)
-        ttk.Radiobutton(loop_mode_frame, text="Repeat X Times", variable=self.loop_mode, value="repeat", command=self.on_loop_mode_change).pack(side="left")
-        ttk.Radiobutton(loop_mode_frame, text="Until Condition Met", variable=self.loop_mode, value="until", command=self.on_loop_mode_change).pack(side="left")
+        tk.Radiobutton(loop_mode_frame, text="Repeat X Times", variable=self.loop_mode, value="repeat", command=self.on_loop_mode_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(loop_mode_frame, text="Until Condition Met", variable=self.loop_mode, value="until", command=self.on_loop_mode_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
 
         # --- Loop Settings ---
         self.loop_settings_frame = tk.Frame(parent_frame, bg=self.app.bg_color)
@@ -693,10 +702,10 @@ class StepEditor(tk.Toplevel):
         branch_parent_frame.pack(pady=5, padx=10, fill="both", expand=True)
 
         # --- IF Branch ---
-        if_frame = self._create_branch_frame(branch_parent_frame, "IF Actions (if condition is true)")
-        self.if_listbox = self._create_branch_listbox(if_frame, self.on_if_action_select)
+        if_frame, if_list_container = self._create_branch_frame(branch_parent_frame, "IF Actions (if condition is true)")
+        self.if_listbox = self._create_branch_listbox(if_list_container, self.on_if_action_select)
         self.if_edit_button, self.if_remove_button = self._create_branch_buttons(
-            if_frame,
+            if_list_container,
             self._add_if_action,
             self._edit_if_action,
             self._remove_if_action
@@ -704,10 +713,10 @@ class StepEditor(tk.Toplevel):
         if_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
 
         # --- ELSE Branch ---
-        else_frame = self._create_branch_frame(branch_parent_frame, "ELSE Actions (optional)")
-        self.else_listbox = self._create_branch_listbox(else_frame, self.on_else_action_select)
+        else_frame, else_list_container = self._create_branch_frame(branch_parent_frame, "ELSE Actions (optional)")
+        self.else_listbox = self._create_branch_listbox(else_list_container, self.on_else_action_select)
         self.else_edit_button, self.else_remove_button = self._create_branch_buttons(
-            else_frame,
+            else_list_container,
             self._add_else_action,
             self._edit_else_action,
             self._remove_else_action
@@ -721,18 +730,21 @@ class StepEditor(tk.Toplevel):
     def _create_branch_frame(self, parent, title):
         frame = tk.Frame(parent, bg=self.app.widget_bg_color, bd=1, relief='solid')
         ttk.Label(frame, text=title, style='Heading.TLabel', background=self.app.widget_bg_color).pack(anchor="w", padx=10, pady=(5,5))
-        return frame
 
-    def _create_branch_listbox(self, parent, select_callback):
-        list_container = tk.Frame(parent, bg=self.app.widget_bg_color)
+        # Create the list container here and return it along with the main frame
+        list_container = tk.Frame(frame, bg=self.app.widget_bg_color)
         list_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        return frame, list_container
+
+    def _create_branch_listbox(self, list_container, select_callback):
         listbox = tk.Listbox(list_container, bg=self.app.card_header, fg=self.app.text_color, relief=tk.FLAT, height=8)
         listbox.pack(side="left", fill="both", expand=True)
         listbox.bind("<<ListboxSelect>>", select_callback)
         return listbox
 
-    def _create_branch_buttons(self, parent, add_cmd, edit_cmd, remove_cmd):
-        button_frame = tk.Frame(parent.winfo_children()[1], bg=self.app.widget_bg_color) # Get the list_container
+    def _create_branch_buttons(self, list_container, add_cmd, edit_cmd, remove_cmd):
+        # Parent the button frame directly to the list_container
+        button_frame = tk.Frame(list_container, bg=self.app.widget_bg_color)
         button_frame.pack(side="left", padx=(5,0), fill="y")
         self.app.create_modern_button(button_frame, "Add", add_cmd, self.app.button_color).pack(pady=2, fill="x")
         edit_button = self.app.create_modern_button(button_frame, "Edit", edit_cmd, self.app.button_color)
@@ -959,26 +971,26 @@ class StepEditor(tk.Toplevel):
         self.wait_step_frame.grid_remove()
 
         if step_type == 'simple':
-            self.simple_action_frame.grid(row=1, column=0, sticky="ew")
+            self.simple_action_frame.grid(row=2, column=0, sticky="ew")
         elif step_type == 'loop':
-            self.loop_frame.grid(row=1, column=0, sticky="ew")
+            self.loop_frame.grid(row=2, column=0, sticky="ew")
         elif step_type == 'conditional_branch':
-            self.conditional_branch_frame.grid(row=1, column=0, sticky="ew")
+            self.conditional_branch_frame.grid(row=2, column=0, sticky="ew")
         elif step_type == 'time_based_condition':
-            self.time_based_condition_frame.grid(row=1, column=0, sticky="ew")
+            self.time_based_condition_frame.grid(row=2, column=0, sticky="ew")
         elif step_type == 'wait':
-            self.wait_step_frame.grid(row=1, column=0, sticky="ew")
+            self.wait_step_frame.grid(row=2, column=0, sticky="ew")
         else: # conditional_loop
-            self.conditional_loop_frame.grid(row=1, column=0, sticky="ew")
+            self.conditional_loop_frame.grid(row=2, column=0, sticky="ew")
 
     def on_mode_change(self):
         self.run_step_validation()
         if self.detection_mode.get() == "Color":
             self.image_frame.grid_remove()
-            self.color_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+            self.color_frame.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         else:
             self.color_frame.grid_remove()
-            self.image_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+            self.image_frame.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(0, 10))
 
     def on_action_change(self):
         self.run_step_validation()
@@ -1026,17 +1038,26 @@ class StepEditor(tk.Toplevel):
             self.fallback_drag_frame.pack_forget()
             self.fallback_target_frame.pack(fill="x")
 
-    def _build_wait_ui(self, parent_frame):
+    def _build_wait_ui_pack(self, parent_frame):
         container = tk.Frame(parent_frame, bg=self.app.bg_color)
         ttk.Label(container, text="Post-Action Wait", style='Heading.TLabel').pack(anchor="w", pady=(0, 5))
         wait_frame = tk.Frame(container, bg=self.app.widget_bg_color, bd=1, relief='solid')
         wait_frame.pack(fill="x", pady=(0, 10), ipady=5, ipadx=5)
+        self._build_wait_ui_content(wait_frame)
+        return container
 
+    def _build_wait_ui_grid(self, parent_frame, row):
+        ttk.Label(parent_frame, text="Post-Action Wait", style='Heading.TLabel').grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        wait_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        wait_frame.grid(row=row + 1, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
+        self._build_wait_ui_content(wait_frame)
+
+    def _build_wait_ui_content(self, wait_frame):
         # --- Wait Type ---
         wait_type_frame = tk.Frame(wait_frame, bg=self.app.widget_bg_color)
-        ttk.Radiobutton(wait_type_frame, text="None", variable=self.wait_type, value="None", command=self.on_wait_type_change).pack(side="left")
-        ttk.Radiobutton(wait_type_frame, text="Fixed", variable=self.wait_type, value="Fixed", command=self.on_wait_type_change).pack(side="left")
-        ttk.Radiobutton(wait_type_frame, text="Random", variable=self.wait_type, value="Random", command=self.on_wait_type_change).pack(side="left")
+        tk.Radiobutton(wait_type_frame, text="None", variable=self.wait_type, value="None", command=self.on_wait_type_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(wait_type_frame, text="Fixed", variable=self.wait_type, value="Fixed", command=self.on_wait_type_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(wait_type_frame, text="Random", variable=self.wait_type, value="Random", command=self.on_wait_type_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
         wait_type_frame.pack(fill="x", pady=(0,5))
 
         # --- Fixed Wait Frame ---
@@ -1052,7 +1073,37 @@ class StepEditor(tk.Toplevel):
         ttk.Entry(self.random_wait_frame, textvariable=self.max_wait, width=7).pack(side="left")
 
         self.on_wait_type_change() # Set initial visibility
+
+    def _build_on_failure_ui_pack(self, parent_frame):
+        container = tk.Frame(parent_frame, bg=self.app.bg_color)
+        ttk.Label(container, text="On Failure", style='Heading.TLabel').pack(anchor="w", pady=(0, 5))
+        on_failure_frame = tk.Frame(container, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        on_failure_frame.pack(fill="x", pady=(0, 10), ipady=5, ipadx=5)
+        self._build_on_failure_ui_content(on_failure_frame)
         return container
+
+    def _build_on_failure_ui_grid(self, parent_frame, row):
+        ttk.Label(parent_frame, text="On Failure", style='Heading.TLabel').grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        on_failure_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        on_failure_frame.grid(row=row + 1, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
+        self._build_on_failure_ui_content(on_failure_frame)
+
+    def _build_on_failure_ui_content(self, on_failure_frame):
+        # --- Policy ---
+        policy_frame = tk.Frame(on_failure_frame, bg=self.app.widget_bg_color)
+        ttk.Label(policy_frame, text="Action on Failure:", background=self.app.widget_bg_color).pack(side="left", padx=(0,10))
+        tk.Radiobutton(policy_frame, text="Stop Bot", variable=self.on_failure_policy, value="Stop", command=self.on_failure_policy_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(policy_frame, text="Skip Step", variable=self.on_failure_policy, value="Skip", command=self.on_failure_policy_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(policy_frame, text="Retry Step", variable=self.on_failure_policy, value="Retry", command=self.on_failure_policy_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        policy_frame.pack(fill="x", pady=(0,5))
+
+        # --- Retries Frame ---
+        self.retries_frame = tk.Frame(on_failure_frame, bg=self.app.widget_bg_color)
+        ttk.Label(self.retries_frame, text="Number of Retries:", background=self.app.widget_bg_color).pack(side="left", padx=5)
+        self.retries_entry = ttk.Entry(self.retries_frame, textvariable=self.on_failure_retries, width=7)
+        self.retries_entry.pack(side="left")
+
+        self.on_failure_policy_change() # Set initial visibility
 
     def on_wait_type_change(self):
         wait_type = self.wait_type.get()
