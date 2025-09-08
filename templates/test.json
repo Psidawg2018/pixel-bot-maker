@@ -1,0 +1,111 @@
+[
+    {
+        "step_type": "simple",
+        "window_title": "Raid: Shadow Legends",
+        "detection_mode": "Image",
+        "action_type": "Set Variable",
+        "action_params": {
+            "variable_name": "var",
+            "variable_value": "1"
+        },
+        "detection_target": [
+            "templates\\vartestbattle.png"
+        ],
+        "detection_target_name": "vartestbattle.png",
+        "search_region": null,
+        "on_failure": {
+            "policy": "Skip"
+        },
+        "wait_params": {
+            "type": "Random",
+            "min_time": 5.0,
+            "max_time": 10.0
+        }
+    },
+    {
+        "step_type": "simple",
+        "window_title": "Raid: Shadow Legends",
+        "detection_mode": "Image",
+        "action_type": "Set Variable",
+        "action_params": {
+            "variable_name": "var",
+            "variable_value": "2"
+        },
+        "detection_target": [
+            "templates\\vartestgamemode.png"
+        ],
+        "detection_target_name": "vartestgamemode.png",
+        "search_region": null,
+        "on_failure": {
+            "policy": "Skip"
+        },
+        "wait_params": {
+            "type": "Random",
+            "min_time": 5.0,
+            "max_time": 10.0
+        }
+    },
+    {
+        "step_type": "conditional_branch",
+        "condition": {
+            "variable": "var",
+            "operator": "equals",
+            "value": "1"
+        },
+        "if_branch": [
+            {
+                "step_type": "simple",
+                "window_title": "Raid: Shadow Legends",
+                "detection_mode": "Image",
+                "action_type": "Click",
+                "action_params": {},
+                "detection_target": [
+                    "templates\\vartestbattle.png"
+                ],
+                "detection_target_name": "vartestbattle.png",
+                "search_region": null,
+                "on_failure": {
+                    "policy": "Skip"
+                },
+                "wait_params": {
+                    "type": "Random",
+                    "min_time": 5.0,
+                    "max_time": 10.0
+                }
+            }
+        ],
+        "else_branch": [
+            {
+                "step_type": "simple",
+                "window_title": "Raid: Shadow Legends",
+                "detection_mode": "Image",
+                "action_type": "Click",
+                "action_params": {},
+                "detection_target": [
+                    "templates\\vartestcampaign.png"
+                ],
+                "detection_target_name": "vartestcampaign.png",
+                "search_region": null,
+                "on_failure": {
+                    "policy": "Skip"
+                },
+                "wait_params": {
+                    "type": "Random",
+                    "min_time": 5.0,
+                    "max_time": 10.0
+                }
+            }
+        ],
+        "window_title": "Raid: Shadow Legends",
+        "wait_params": {
+            "type": "None"
+        }
+    },
+    {
+        "step_type": "wait",
+        "duration": 15.0,
+        "wait_params": {
+            "type": "None"
+        }
+    }
+]
