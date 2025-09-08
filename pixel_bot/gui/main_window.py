@@ -326,28 +326,87 @@ class App(tk.Tk):
         # General widget styling
         self.style.configure('TFrame', background=colors['bg_color'])
         self.style.configure('TLabel', background=colors['bg_color'], foreground=colors['text_color'], padding=5, font=fonts["primary"])
-        self.style.configure('TButton', background=colors['widget_bg_color'], foreground=colors['text_color'], padding=5, font=fonts["button"])
-        self.style.map('TButton', background=[('active', colors['button_color'])])
+
+        # In _apply_custom_styles method:
+        self.style.configure('TButton',
+            background=colors['widget_bg_color'],
+            foreground=colors['text_color'],
+            font=self.font_manager.fonts["button"],
+            relief='flat',
+            borderwidth=1,
+            focuscolor='none')
+
+        self.style.map('TButton',
+            background=[
+                ('active', colors['button_color']),      # Hover state
+                ('pressed', colors['accent_color'])      # Pressed state
+            ],
+            bordercolor=[
+                ('active', colors['accent_color']),      # Hover border
+                ('focus', colors['accent_color'])        # Focus border
+            ])
+
         self.style.configure('TCheckbutton', background=colors['bg_color'], foreground=colors['text_color'], font=fonts["primary"])
         self.style.map('TCheckbutton', background=[('active', colors['bg_color'])])
         self.style.configure('TRadiobutton', background=colors['bg_color'], foreground=colors['text_color'], font=fonts["primary"])
         self.style.map('TRadiobutton', background=[('active', colors['bg_color'])])
-        self.style.configure('TEntry', fieldbackground=colors['widget_bg_color'], foreground=colors['text_color'], insertcolor=colors['text_color'], font=fonts["primary"])
-        self.style.configure('TLabelFrame', background=colors['bg_color'], relief=tk.SOLID, borderwidth=1)
+
+        self.style.configure('TEntry',
+            fieldbackground=colors['widget_bg_color'],
+            foreground=colors['text_color'],
+            insertcolor=colors['text_color'],
+            relief='flat',
+            borderwidth=1)
+
+        self.style.map('TEntry',
+            focuscolor=[('focus', colors['accent_color'])])
+
+        self.style.configure('TLabelFrame',
+            background=colors['bg_color'],
+            relief='flat',
+            borderwidth=1,
+            lightcolor=colors['widget_bg_color'],       # Use widget bg as border
+            darkcolor=colors['widget_bg_color'])        # Use widget bg as border
+
         self.style.configure('TLabelFrame.Label', background=colors['bg_color'], foreground=colors['text_color'], font=fonts["heading"])
 
 
         # Special "Card" style for labels that need a background
         self.style.configure("Card.TLabel", background=colors['widget_bg_color'], relief=tk.SOLID, borderwidth=1, font=fonts["primary"])
 
-        # Special "Accent" button style
-        self.style.configure("Accent.TButton", background=colors['accent_color'], foreground=colors['bg_color'], font=fonts["button"])
-        self.style.map("Accent.TButton", background=[('active', colors['text_color'])])
+        # Accent Button (Start Bot)
+        self.style.configure("Accent.TButton",
+            background=colors['accent_color'],
+            foreground=colors['button_text_color'],     # Use existing white
+            font=self.font_manager.fonts["button"],
+            relief='flat',
+            borderwidth=0,
+            focuscolor='none')
+
+        self.style.map("Accent.TButton",
+            background=[
+                ('active', colors['button_color']),      # Hover to blue
+                ('pressed', colors['accent_color'])      # Keep same on press
+            ])
 
         # Notebook styling
         self.style.configure('TNotebook', background=colors['bg_color'], borderwidth=0)
         self.style.configure('TNotebook.Tab', background=colors['bg_color'], foreground=colors['text_color'], padding=[10, 5], font=fonts["primary"])
         self.style.map('TNotebook.Tab', background=[('selected', colors['widget_bg_color'])], foreground=[('selected', colors['accent_color'])])
+
+        # Table/Treeview Styling (if applicable)
+        self.style.configure('Treeview',
+            background=colors['widget_bg_color'],
+            foreground=colors['text_color'],
+            fieldbackground=colors['widget_bg_color'],
+            relief='flat',
+            borderwidth=1)
+
+        self.style.configure('Treeview.Heading',
+            background=colors['bg_color'],              # Use main background
+            foreground=colors['text_color'],            # Use main text color
+            relief='flat')
+
 
         # Apply background and foreground to the log area specifically
         self.log_area.config(
