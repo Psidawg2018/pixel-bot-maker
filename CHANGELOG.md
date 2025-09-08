@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1] - 2025-09-08
+
+### Changed
+- Enhanced button styling with a modern flat design, improved hover/pressed states, and clearer focus indicators.
+- Improved the visual appearance of the sequence listbox with a card-like design, accent color highlighting, and better spacing.
+- Added emoji icons to the sequence list to provide quick visual identification for different step types.
+
+### Fixed
+- Fixed a critical bug where the application would crash on startup due to the `accent_color` not being initialized correctly.
+
 ## [1.0.0] - 2025-09-07
 
 ### Added
