@@ -1,4 +1,4 @@
-# Pixel Bot Maker v1.0.0
+# Pixel Bot Maker v1.0.1
 
 A simple GUI application for creating automated bot scripts that can find images or colors on the screen and perform actions.
 
@@ -6,11 +6,7 @@ A simple GUI application for creating automated bot scripts that can find images
 
 Pixel Bot Maker is a user-friendly tool designed for creating simple automation scripts (bots) without writing any code. It allows you to build a sequence of actions, such as clicking buttons or typing text, by identifying images or colors on your screen. It's perfect for automating repetitive tasks in games, applications, or websites.
 
-### Screenshots
-
-*A screenshot of the main interface would go here, showing the two-column layout, action sequence, and log.*
-
-*A short GIF demonstrating the process of adding a step, saving a sequence, and running the bot would be ideal here.*
+The user interface has been recently updated with a modern, flat design for a more professional and intuitive experience.
 
 ## Features
 

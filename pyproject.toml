@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixel-bot-maker"
-version = "1.0.0"
+version = "1.0.1"
 description = "A simple GUI application for creating automated bot scripts."
 readme = "README.md"
 requires-python = ">=3.8"
