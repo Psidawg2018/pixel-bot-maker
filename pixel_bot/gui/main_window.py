@@ -329,6 +329,7 @@ class App(tk.Tk):
         self.bg_color = colors['bg_color']
         self.widget_bg_color = colors['widget_bg_color']
         self.text_color = colors['text_color']
+        self.accent_color = colors['accent_color']
         self.button_color = colors['button_color']
         self.button_text_color = colors['button_text_color']
 
