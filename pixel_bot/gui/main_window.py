@@ -273,7 +273,7 @@ class App(tk.Tk):
         self.settings_card_content = self.create_modern_card(right_frame, "⚙️ Settings")
 
         # The various settings are now created in sub-frames parented to the card's content area
-        settings_inner_frame = tk.Frame(settings_card_content, bg=self.widget_bg_color)
+        settings_inner_frame = tk.Frame(self.settings_card_content, bg=self.widget_bg_color)
         settings_inner_frame.pack(fill='both', expand=True, padx=15, pady=10)
 
         # --- General Settings ---
