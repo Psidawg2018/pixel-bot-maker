@@ -29,8 +29,7 @@ class PreviewOverlay(tk.Toplevel):
         self.canvas.create_text(
             self.winfo_screenwidth() / 2, 30,
             text="Live Preview Running... Press ESC to close.",
-            fill="white", font=("Segoe UI", 16, "bold"),
-            outline="black", width=2
+            fill="white", font=("Segoe UI", 16, "bold")
         )
 
         self.bind("<Escape>", lambda e: self.destroy())
