@@ -133,7 +133,7 @@ class StepEditor(tk.Toplevel):
         button_frame.pack(side="bottom", fill="x", pady=10, padx=10)
 
         # A main content frame that can expand and scroll
-        content_frame = tk.Frame(self, padding="10", bg=self.app.bg_color)
+        content_frame = tk.Frame(self, bg=self.app.bg_color, padx=10, pady=10)
         content_frame.pack(side="top", fill="both", expand=True)
         content_frame.columnconfigure(0, weight=1)
 
@@ -166,12 +166,12 @@ class StepEditor(tk.Toplevel):
             self.step_type_radios[value] = radio
 
         # --- Main Frames for each step type (parented to content_frame) ---
-        self.simple_action_frame = tk.Frame(content_frame, bg=self.app.bg_color, padding="10")
-        self.conditional_loop_frame = tk.Frame(content_frame, bg=self.app.bg_color, padding="10")
-        self.loop_frame = tk.Frame(content_frame, bg=self.app.bg_color, padding="10")
-        self.conditional_branch_frame = tk.Frame(content_frame, bg=self.app.bg_color, padding="10")
-        self.time_based_condition_frame = tk.Frame(content_frame, bg=self.app.bg_color, padding="10")
-        self.wait_step_frame = tk.Frame(content_frame, bg=self.app.bg_color, padding="10")
+        self.simple_action_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.conditional_loop_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.loop_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.conditional_branch_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.time_based_condition_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.wait_step_frame = tk.Frame(content_frame, bg=self.app.bg_color)
 
         # --- UI for Simple Action Frame ---
         self.build_simple_action_ui(self.simple_action_frame)
@@ -509,12 +509,13 @@ class StepEditor(tk.Toplevel):
         self._build_on_failure_ui_grid(parent_frame, row=8)
         self._build_wait_ui_grid(parent_frame, row=10)
 
-    def _build_on_failure_ui(self, parent_frame):
-        container = tk.Frame(parent_frame, bg=self.app.bg_color)
-        ttk.Label(container, text="On Failure", style='Heading.TLabel').pack(anchor="w", pady=(0, 5))
-        on_failure_frame = tk.Frame(container, bg=self.app.widget_bg_color, bd=1, relief='solid')
-        on_failure_frame.pack(fill="x", pady=(0, 10), ipady=5, ipadx=5)
+    def _build_on_failure_ui_grid(self, parent_frame, row):
+        ttk.Label(parent_frame, text="On Failure", style='Heading.TLabel').grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        on_failure_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        on_failure_frame.grid(row=row + 1, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
+        self._build_on_failure_ui_content(on_failure_frame)
 
+    def _build_on_failure_ui_content(self, on_failure_frame):
         # --- Policy ---
         policy_frame = tk.Frame(on_failure_frame, bg=self.app.widget_bg_color)
         ttk.Label(policy_frame, text="Action on Failure:", background=self.app.widget_bg_color).pack(side="left", padx=(0,10))
@@ -530,7 +531,6 @@ class StepEditor(tk.Toplevel):
         self.retries_entry.pack(side="left")
 
         self.on_failure_policy_change() # Set initial visibility
-        return container
 
     def on_failure_policy_change(self):
         if self.on_failure_policy.get() == "Retry":
@@ -1073,14 +1073,6 @@ class StepEditor(tk.Toplevel):
         ttk.Entry(self.random_wait_frame, textvariable=self.max_wait, width=7).pack(side="left")
 
         self.on_wait_type_change() # Set initial visibility
-
-    def _build_on_failure_ui_pack(self, parent_frame):
-        container = tk.Frame(parent_frame, bg=self.app.bg_color)
-        ttk.Label(container, text="On Failure", style='Heading.TLabel').pack(anchor="w", pady=(0, 5))
-        on_failure_frame = tk.Frame(container, bg=self.app.widget_bg_color, bd=1, relief='solid')
-        on_failure_frame.pack(fill="x", pady=(0, 10), ipady=5, ipadx=5)
-        self._build_on_failure_ui_content(on_failure_frame)
-        return container
 
     def _build_on_failure_ui_grid(self, parent_frame, row):
         ttk.Label(parent_frame, text="On Failure", style='Heading.TLabel').grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
