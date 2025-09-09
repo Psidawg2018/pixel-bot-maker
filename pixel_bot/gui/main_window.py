@@ -418,8 +418,39 @@ class App(tk.Tk):
 
     def scroll_to_widget(self, widget):
         self.canvas.update_idletasks()
-        y = widget.winfo_y()
-        self.canvas.yview_moveto(y / self.canvas.winfo_height())
+
+        scroll_region_str = self.canvas.cget("scrollregion")
+        if not scroll_region_str: return
+
+        try:
+            scrollable_height = float(scroll_region_str.split(' ')[3])
+        except (ValueError, IndexError):
+            return # Invalid scrollregion format
+
+        if scrollable_height <= 0: return
+
+        # Y position of the top of the canvas viewport, relative to the root window
+        canvas_root_y = self.canvas.winfo_rooty()
+
+        # Y position of the top of the widget, relative to the root window
+        widget_root_y = widget.winfo_rooty()
+
+        # The widget's y-position relative to the canvas's top edge
+        y_in_canvas = widget_root_y - canvas_root_y
+
+        # The current scroll position (a tuple of fractions, e.g., (0.0, 0.5))
+        current_scroll_fraction = self.canvas.yview()
+
+        # The y-offset of the scrolled content
+        scrolled_y_offset = current_scroll_fraction[0] * scrollable_height
+
+        # The widget's "true" y-position within the entire scrollable content
+        absolute_y = y_in_canvas + scrolled_y_offset
+
+        # The fraction to scroll to, ensuring it's not more than 1.0
+        fraction = min(absolute_y / scrollable_height, 1.0)
+
+        self.canvas.yview_moveto(fraction)
 
     def create_modern_header(self, parent):
         header_frame = tk.Frame(parent, bg=self.bg_color, height=60)
