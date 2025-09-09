@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2025-09-08
+
+### Changed
+- **Complete UI Overhaul**: Implemented a modern, card-based dark theme across the entire application, including the main window and the Step Editor.
+- Replaced the old tabbed layout with a single, scrollable view with distinct cards for different functions (Action Sequence, Bot Controls, Settings, etc.).
+- Replaced most `ttk` widgets with standard `tk` widgets to allow for consistent custom styling.
+- Implemented a new scrollable main area and header navigation buttons to access all UI cards.
+
+### Fixed
+- Resolved numerous stability issues related to the UI refactoring, including `NameError`, `TclError`, and incorrect widget parenting.
+
 ## [1.0.1] - 2025-09-08
 
 ### Changed

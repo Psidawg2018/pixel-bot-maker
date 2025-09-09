@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 import cv2
+import pyautogui as gw
 
 # App is imported locally in __init__ to avoid circular dependency.
 from ..core.script_validator import ScriptValidator
@@ -128,49 +129,49 @@ class StepEditor(tk.Toplevel):
 
         # --- LAYOUT FRAMES ---
         # A bottom frame for buttons that never gets pushed out of view
-        button_frame = ttk.Frame(self)
+        button_frame = tk.Frame(self, bg=self.app.bg_color)
         button_frame.pack(side="bottom", fill="x", pady=10, padx=10)
 
         # A main content frame that can expand and scroll
-        content_frame = ttk.Frame(self, padding="10")
+        content_frame = tk.Frame(self, bg=self.app.bg_color, padx=10, pady=10)
         content_frame.pack(side="top", fill="both", expand=True)
         content_frame.columnconfigure(0, weight=1)
 
         # --- Validation Summary & Save/Cancel Buttons (parented to button_frame) ---
-        self.validation_summary_label = ttk.Label(button_frame, text="✓ Looks good!", anchor="w", foreground="green")
+        self.validation_summary_label = ttk.Label(button_frame, text="✓ Looks good!", anchor="w", foreground="green", background=self.app.bg_color)
         self.validation_summary_label.pack(side="left", padx=10, fill="x", expand=True)
-        self.save_button = ttk.Button(button_frame, text="Save Step", command=self.on_save, style="Accent.TButton")
+        self.app.create_modern_button(button_frame, "Cancel", self.destroy, self.app.button_color).pack(side="right", padx=10)
+        self.save_button = self.app.create_modern_button(button_frame, "Save Step", self.on_save, self.app.accent_color)
         self.save_button.pack(side="right")
-        ttk.Button(button_frame, text="Cancel", command=self.destroy).pack(side="right", padx=10)
 
 
         # --- WIDGETS ---
         # --- Step Type Selection ---
-        step_type_frame = ttk.LabelFrame(content_frame, text="Step Type", padding="10")
-        step_type_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        step_type_frame.columnconfigure(0, weight=1) # Allow radio buttons to space out
+        ttk.Label(content_frame, text="Step Type", style='Heading.TLabel').grid(row=0, column=0, sticky="w", pady=(0, 5))
+        step_type_frame = tk.Frame(content_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        step_type_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
 
-        self.step_type_radios = {}
         step_types = [
-            ("Simple Action", "simple"),
-            ("Wait", "wait"),
-            ("If/Else", "conditional_branch"),
-            ("Loop", "loop"),
-            ("Time-based Condition", "time_based_condition"),
-            ("Conditional (Legacy)", "conditional_loop")
+            ("Simple Action", "simple"), ("Wait", "wait"), ("If/Else", "conditional_branch"),
+            ("Loop", "loop"), ("Time-based Condition", "time_based_condition"), ("Conditional (Legacy)", "conditional_loop")
         ]
+        self.step_type_radios = {}
         for i, (text, value) in enumerate(step_types):
-            radio = ttk.Radiobutton(step_type_frame, text=text, variable=self.step_type, value=value, command=self.on_step_type_change)
+            radio = tk.Radiobutton(step_type_frame, text=text, variable=self.step_type, value=value, command=self.on_step_type_change,
+                                   bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header,
+                                   activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color,
+                                   relief='flat', highlightthickness=0, anchor='w', justify='left')
             radio.grid(row=0, column=i, sticky="ew", padx=5)
+            step_type_frame.columnconfigure(i, weight=1)
             self.step_type_radios[value] = radio
 
         # --- Main Frames for each step type (parented to content_frame) ---
-        self.simple_action_frame = ttk.Frame(content_frame, padding="10")
-        self.conditional_loop_frame = ttk.Frame(content_frame, padding="10")
-        self.loop_frame = ttk.Frame(content_frame, padding="10")
-        self.conditional_branch_frame = ttk.Frame(content_frame, padding="10")
-        self.time_based_condition_frame = ttk.Frame(content_frame, padding="10")
-        self.wait_step_frame = ttk.Frame(content_frame, padding="10")
+        self.simple_action_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.conditional_loop_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.loop_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.conditional_branch_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.time_based_condition_frame = tk.Frame(content_frame, bg=self.app.bg_color)
+        self.wait_step_frame = tk.Frame(content_frame, bg=self.app.bg_color)
 
         # --- UI for Simple Action Frame ---
         self.build_simple_action_ui(self.simple_action_frame)
@@ -383,138 +384,153 @@ class StepEditor(tk.Toplevel):
         # This function builds the UI for a simple action, parented to the given frame.
         parent_frame.columnconfigure(1, weight=1) # Allow labels and entries to expand
 
-        window_frame = ttk.LabelFrame(parent_frame, text="1. Select Target Window", padding="10")
-        window_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        ttk.Label(parent_frame, text="1. Select Target Window", style='Heading.TLabel').grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        window_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        window_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
         window_frame.columnconfigure(0, weight=1)
-        self.window_label = ttk.Label(window_frame, textvariable=self.target_window_title, wraplength=250)
+        self.window_label = ttk.Label(window_frame, textvariable=self.target_window_title, wraplength=250, background=self.app.widget_bg_color)
         self.window_label.grid(row=0, column=0, sticky="ew", padx=(0, 10))
-        ttk.Button(window_frame, text="Select...", command=self.select_window).grid(row=0, column=1)
+        self.app.create_modern_button(window_frame, "Select...", self.select_window, self.app.button_color).grid(row=0, column=1)
         if not self.target_window_title.get(): self.target_window_title.set("(None Selected)")
 
-        region_frame = ttk.LabelFrame(parent_frame, text="2. Set Search Region (Optional)", padding="10")
-        region_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        ttk.Label(parent_frame, text="2. Set Search Region (Optional)", style='Heading.TLabel').grid(row=2, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        region_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        region_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
         region_frame.columnconfigure(0, weight=1)
-        self.region_label = ttk.Label(region_frame, textvariable=self.search_region_label_var, wraplength=350)
+        self.region_label = ttk.Label(region_frame, textvariable=self.search_region_label_var, wraplength=350, background=self.app.widget_bg_color)
         self.region_label.grid(row=0, column=0, sticky="ew", padx=(0, 10))
-        ttk.Button(region_frame, text="Set Region", command=self.set_search_region).grid(row=0, column=1, padx=(0, 5))
-        ttk.Button(region_frame, text="Clear", command=self.clear_search_region).grid(row=0, column=2)
+        self.app.create_modern_button(region_frame, "Set Region", self.set_search_region, self.app.button_color).grid(row=0, column=1, padx=(0, 5))
+        self.app.create_modern_button(region_frame, "Clear", self.clear_search_region, self.app.sleek_blue_theme['danger_color']).grid(row=0, column=2)
 
+        ttk.Label(parent_frame, text="3. Choose What to Look For", style='Heading.TLabel').grid(row=4, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        mode_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        mode_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
+        tk.Radiobutton(mode_frame, text="Color", variable=self.detection_mode, value="Color", command=self.on_mode_change,
+                                   bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header,
+                                   activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color,
+                                   relief='flat', highlightthickness=0, anchor='w', justify='left').pack(anchor="w")
+        tk.Radiobutton(mode_frame, text="Image", variable=self.detection_mode, value="Image", command=self.on_mode_change,
+                                   bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header,
+                                   activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color,
+                                   relief='flat', highlightthickness=0, anchor='w', justify='left').pack(anchor="w")
 
-        mode_frame = ttk.LabelFrame(parent_frame, text="3. Choose What to Look For", padding="10")
-        mode_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 10))
-        ttk.Radiobutton(mode_frame, text="Color", variable=self.detection_mode, value="Color", command=self.on_mode_change).pack(anchor="w")
-        ttk.Radiobutton(mode_frame, text="Image", variable=self.detection_mode, value="Image", command=self.on_mode_change).pack(anchor="w")
+        self.color_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color)
+        self.image_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color)
 
-        self.color_frame = ttk.Frame(parent_frame)
-        self.image_frame = ttk.Frame(parent_frame)
-
-        ttk.Button(self.color_frame, text="Sample Color", command=self.sample_color).pack()
+        self.app.create_modern_button(self.color_frame, "Sample Color", self.sample_color, self.app.button_color).pack()
         self.color_preview = tk.Frame(self.color_frame, bg=self.app._bgr_to_hex(self.target_color_bgr), width=25, height=25, relief=tk.SUNKEN, borderwidth=1)
         self.color_preview.pack(pady=5)
 
-        ttk.Button(self.image_frame, text="Take Screenshot", command=self.take_screenshot).pack(pady=(0,5))
+        self.app.create_modern_button(self.image_frame, "Take Screenshot", self.take_screenshot, self.app.button_color).pack(pady=(0,5))
 
         # --- Image List ---
-        image_list_frame = ttk.Frame(self.image_frame)
+        image_list_frame = tk.Frame(self.image_frame, bg=self.app.widget_bg_color)
         image_list_frame.pack(fill="x", expand=True, pady=5)
         image_list_frame.columnconfigure(0, weight=1)
 
-        self.image_listbox = tk.Listbox(image_list_frame, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, height=4, selectmode=tk.EXTENDED)
+        self.image_listbox = tk.Listbox(image_list_frame, bg=self.app.card_header, fg=self.app.text_color, relief=tk.FLAT, height=4, selectmode=tk.EXTENDED)
         self.image_listbox.grid(row=0, column=0, sticky="ew", rowspan=2)
 
-        image_button_frame = ttk.Frame(image_list_frame)
+        image_button_frame = tk.Frame(image_list_frame, bg=self.app.widget_bg_color)
         image_button_frame.grid(row=0, column=1, rowspan=2, sticky="ns", padx=(5,0))
-        ttk.Button(image_button_frame, text="Add", command=lambda: self._add_image_template_to_listbox(self.image_listbox)).pack(fill="x", pady=2)
-        ttk.Button(image_button_frame, text="Remove", command=lambda: self._remove_image_template_from_listbox(self.image_listbox)).pack(fill="x", pady=2)
+        self.app.create_modern_button(image_button_frame, "Add", lambda: self._add_image_template_to_listbox(self.image_listbox), self.app.button_color).pack(fill="x", pady=2)
+        self.app.create_modern_button(image_button_frame, "Remove", lambda: self._remove_image_template_from_listbox(self.image_listbox), self.app.sleek_blue_theme['danger_color']).pack(fill="x", pady=2)
 
         self._update_image_listbox()
 
-        action_frame = ttk.LabelFrame(parent_frame, text="4. Choose Action", padding="10")
-        action_frame.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        ttk.Label(parent_frame, text="4. Choose Action", style='Heading.TLabel').grid(row=6, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        action_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        action_frame.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
         action_types = ["Click", "Right-click", "Click with Offset", "Type", "Key Combo", "Scroll", "Set Variable", "Modify Variable", "OCR"]
         for i, action in enumerate(action_types):
-            ttk.Radiobutton(action_frame, text=action, variable=self.action_type, value=action, command=self.on_action_change).grid(row=i, column=0, sticky="w")
+            tk.Radiobutton(action_frame, text=action, variable=self.action_type, value=action, command=self.on_action_change,
+                                   bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header,
+                                   activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color,
+                                   relief='flat', highlightthickness=0, anchor='w', justify='left').grid(row=i, column=0, sticky="w")
 
-        self.type_entry_frame = ttk.Frame(action_frame)
+        self.type_entry_frame = tk.Frame(action_frame, bg=self.app.widget_bg_color)
         self.type_entry = ttk.Entry(self.type_entry_frame, textvariable=self.text_to_type)
         self.type_entry.pack(fill="x", padx=5, pady=5)
 
-        self.key_combo_frame = ttk.Frame(action_frame)
-        ttk.Label(self.key_combo_frame, text="Keys (e.g., ctrl+alt+delete):").pack(side="left", padx=5)
+        self.key_combo_frame = tk.Frame(action_frame, bg=self.app.widget_bg_color)
+        ttk.Label(self.key_combo_frame, text="Keys (e.g., ctrl+alt+delete):", background=self.app.widget_bg_color).pack(side="left", padx=5)
         self.key_combo_entry = ttk.Entry(self.key_combo_frame, textvariable=self.key_combo_text, width=20)
         self.key_combo_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
 
-        self.set_variable_frame = ttk.Frame(action_frame)
-        ttk.Label(self.set_variable_frame, text="Name:").pack(side="left", padx=5)
+        self.set_variable_frame = tk.Frame(action_frame, bg=self.app.widget_bg_color)
+        ttk.Label(self.set_variable_frame, text="Name:", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(self.set_variable_frame, textvariable=self.variable_name, width=15).pack(side="left", padx=5)
-        ttk.Label(self.set_variable_frame, text="Value:").pack(side="left", padx=5)
+        ttk.Label(self.set_variable_frame, text="Value:", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(self.set_variable_frame, textvariable=self.variable_value, width=20).pack(side="left", padx=5)
 
-        self.modify_variable_frame = ttk.Frame(action_frame)
-        ttk.Label(self.modify_variable_frame, text="Name:").pack(side="left", padx=5)
+        self.modify_variable_frame = tk.Frame(action_frame, bg=self.app.widget_bg_color)
+        ttk.Label(self.modify_variable_frame, text="Name:", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(self.modify_variable_frame, textvariable=self.modify_variable_name, width=15).pack(side="left", padx=5)
         operations = ["add", "subtract", "set"]
         ttk.OptionMenu(self.modify_variable_frame, self.modify_variable_operation, *operations).pack(side="left", padx=5)
-        ttk.Label(self.modify_variable_frame, text="Value:").pack(side="left", padx=5)
+        ttk.Label(self.modify_variable_frame, text="Value:", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(self.modify_variable_frame, textvariable=self.modify_variable_value, width=15).pack(side="left", padx=5)
 
-        self.ocr_frame = ttk.Frame(action_frame)
-        ocr_var_frame = ttk.Frame(self.ocr_frame)
-        ttk.Label(ocr_var_frame, text="Save Text to Variable:").pack(side="left", padx=5)
+        self.ocr_frame = tk.Frame(action_frame, bg=self.app.widget_bg_color)
+        ocr_var_frame = tk.Frame(self.ocr_frame, bg=self.app.widget_bg_color)
+        ttk.Label(ocr_var_frame, text="Save Text to Variable:", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(ocr_var_frame, textvariable=self.output_variable_name, width=20).pack(side="left", padx=5)
         ocr_var_frame.pack(fill="x", pady=2)
 
-        ocr_region_frame = ttk.Frame(self.ocr_frame)
-        self.ocr_region_label = ttk.Label(ocr_region_frame, textvariable=self.ocr_region_label_var, wraplength=350)
+        ocr_region_frame = tk.Frame(self.ocr_frame, bg=self.app.widget_bg_color)
+        self.ocr_region_label = ttk.Label(ocr_region_frame, textvariable=self.ocr_region_label_var, wraplength=350, background=self.app.widget_bg_color)
         self.ocr_region_label.pack(side="left", fill="x", expand=True, padx=5)
-        ttk.Button(ocr_region_frame, text="Set Region", command=self.set_ocr_region).pack(side="left", padx=(0, 5))
+        self.app.create_modern_button(ocr_region_frame, "Set Region", self.set_ocr_region, self.app.button_color).pack(side="left", padx=(0, 5))
         ocr_region_frame.pack(fill="x", pady=2)
 
 
-        self.simple_offset_frame = ttk.Frame(action_frame)
-        simple_offset_x_frame = ttk.Frame(self.simple_offset_frame)
-        ttk.Label(simple_offset_x_frame, text="X Offset:").pack(side="left", padx=5)
+        self.simple_offset_frame = tk.Frame(action_frame, bg=self.app.widget_bg_color)
+        simple_offset_x_frame = tk.Frame(self.simple_offset_frame, bg=self.app.widget_bg_color)
+        ttk.Label(simple_offset_x_frame, text="X Offset:", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(simple_offset_x_frame, textvariable=self.simple_click_offset_x, width=7).pack(side="left")
         simple_offset_x_frame.pack(fill="x", pady=2)
-        simple_offset_y_frame = ttk.Frame(self.simple_offset_frame)
-        ttk.Label(simple_offset_y_frame, text="Y Offset:").pack(side="left", padx=5)
+        simple_offset_y_frame = tk.Frame(self.simple_offset_frame, bg=self.app.widget_bg_color)
+        ttk.Label(simple_offset_y_frame, text="Y Offset:", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(simple_offset_y_frame, textvariable=self.simple_click_offset_y, width=7).pack(side="left")
         simple_offset_y_frame.pack(fill="x", pady=2)
 
-        self.scroll_frame = ttk.Frame(action_frame)
-        scroll_direction_frame = ttk.Frame(self.scroll_frame)
-        ttk.Label(scroll_direction_frame, text="Direction:").pack(side="left", padx=5)
+        self.scroll_frame = tk.Frame(action_frame, bg=self.app.widget_bg_color)
+        scroll_direction_frame = tk.Frame(self.scroll_frame, bg=self.app.widget_bg_color)
+        ttk.Label(scroll_direction_frame, text="Direction:", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.OptionMenu(scroll_direction_frame, self.scroll_direction, "Down", "Up").pack(side="left")
         scroll_direction_frame.pack(fill="x", pady=2)
-        scroll_amount_frame = ttk.Frame(self.scroll_frame)
-        ttk.Label(scroll_amount_frame, text="Amount:").pack(side="left", padx=5)
+        scroll_amount_frame = tk.Frame(self.scroll_frame, bg=self.app.widget_bg_color)
+        ttk.Label(scroll_amount_frame, text="Amount:", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(scroll_amount_frame, textvariable=self.scroll_amount, width=7).pack(side="left")
         scroll_amount_frame.pack(fill="x", pady=2)
 
         self.on_mode_change()
         self.on_action_change()
-        self._build_on_failure_ui(parent_frame).grid(row=5, column=0, columnspan=2, sticky="ew", pady=(0, 10))
-        self._build_wait_ui(parent_frame).grid(row=6, column=0, columnspan=2, sticky="ew")
+        self._build_on_failure_ui_grid(parent_frame, row=8)
+        self._build_wait_ui_grid(parent_frame, row=10)
 
-    def _build_on_failure_ui(self, parent_frame):
-        on_failure_frame = ttk.LabelFrame(parent_frame, text="On Failure", padding="10")
+    def _build_on_failure_ui_grid(self, parent_frame, row):
+        ttk.Label(parent_frame, text="On Failure", style='Heading.TLabel').grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        on_failure_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        on_failure_frame.grid(row=row + 1, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
+        self._build_on_failure_ui_content(on_failure_frame)
 
+    def _build_on_failure_ui_content(self, on_failure_frame):
         # --- Policy ---
-        policy_frame = ttk.Frame(on_failure_frame)
-        ttk.Label(policy_frame, text="Action on Failure:").pack(side="left", padx=(0,10))
-        ttk.Radiobutton(policy_frame, text="Stop Bot", variable=self.on_failure_policy, value="Stop", command=self.on_failure_policy_change).pack(side="left")
-        ttk.Radiobutton(policy_frame, text="Skip Step", variable=self.on_failure_policy, value="Skip", command=self.on_failure_policy_change).pack(side="left")
-        ttk.Radiobutton(policy_frame, text="Retry Step", variable=self.on_failure_policy, value="Retry", command=self.on_failure_policy_change).pack(side="left")
+        policy_frame = tk.Frame(on_failure_frame, bg=self.app.widget_bg_color)
+        ttk.Label(policy_frame, text="Action on Failure:", background=self.app.widget_bg_color).pack(side="left", padx=(0,10))
+        tk.Radiobutton(policy_frame, text="Stop Bot", variable=self.on_failure_policy, value="Stop", command=self.on_failure_policy_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(policy_frame, text="Skip Step", variable=self.on_failure_policy, value="Skip", command=self.on_failure_policy_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(policy_frame, text="Retry Step", variable=self.on_failure_policy, value="Retry", command=self.on_failure_policy_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
         policy_frame.pack(fill="x", pady=(0,5))
 
         # --- Retries Frame ---
-        self.retries_frame = ttk.Frame(on_failure_frame)
-        ttk.Label(self.retries_frame, text="Number of Retries:").pack(side="left", padx=5)
+        self.retries_frame = tk.Frame(on_failure_frame, bg=self.app.widget_bg_color)
+        ttk.Label(self.retries_frame, text="Number of Retries:", background=self.app.widget_bg_color).pack(side="left", padx=5)
         self.retries_entry = ttk.Entry(self.retries_frame, textvariable=self.on_failure_retries, width=7)
         self.retries_entry.pack(side="left")
 
         self.on_failure_policy_change() # Set initial visibility
-        return on_failure_frame
 
     def on_failure_policy_change(self):
         if self.on_failure_policy.get() == "Retry":
@@ -524,71 +540,74 @@ class StepEditor(tk.Toplevel):
 
     def build_conditional_loop_ui(self, parent_frame):
         # --- Loop Settings ---
-        retries_frame = ttk.LabelFrame(parent_frame, text="Loop Settings", padding="10")
-        retries_frame.pack(pady=5, padx=10, fill="x")
-        ttk.Label(retries_frame, text="Max Retries:").pack(side="left", padx=5)
+        ttk.Label(parent_frame, text="Loop Settings", style='Heading.TLabel').pack(anchor="w", padx=10)
+        retries_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        retries_frame.pack(pady=5, padx=10, fill="x", ipady=5, ipadx=5)
+        ttk.Label(retries_frame, text="Max Retries:", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(retries_frame, textvariable=self.max_retries, width=5).pack(side="left", padx=5)
 
         # --- Primary Target ---
-        primary_target_frame = ttk.LabelFrame(parent_frame, text="Primary Target (Image(s) to find)", padding="10")
-        primary_target_frame.pack(pady=5, padx=10, fill="x")
+        ttk.Label(parent_frame, text="Primary Target (Image(s) to find)", style='Heading.TLabel').pack(anchor="w", padx=10, pady=(10,0))
+        primary_target_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        primary_target_frame.pack(pady=5, padx=10, fill="x", ipady=5, ipadx=5)
 
-        primary_list_frame = ttk.Frame(primary_target_frame)
+        primary_list_frame = tk.Frame(primary_target_frame, bg=self.app.widget_bg_color)
         primary_list_frame.pack(fill="x", expand=True, pady=5)
 
-        self.primary_image_listbox = tk.Listbox(primary_list_frame, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, height=4, selectmode=tk.EXTENDED)
+        self.primary_image_listbox = tk.Listbox(primary_list_frame, bg=self.app.card_header, fg=self.app.text_color, relief=tk.FLAT, height=4, selectmode=tk.EXTENDED)
         self.primary_image_listbox.pack(side="left", fill="x", expand=True)
 
-        primary_button_frame = ttk.Frame(primary_list_frame)
+        primary_button_frame = tk.Frame(primary_list_frame, bg=self.app.widget_bg_color)
         primary_button_frame.pack(side="left", padx=(5,0))
-        ttk.Button(primary_button_frame, text="Add", command=lambda: self._add_image_template_to_listbox(self.primary_image_listbox)).pack(fill="x", pady=2)
-        ttk.Button(primary_button_frame, text="Remove", command=lambda: self._remove_image_template_from_listbox(self.primary_image_listbox)).pack(fill="x", pady=2)
+        self.app.create_modern_button(primary_button_frame, "Add", lambda: self._add_image_template_to_listbox(self.primary_image_listbox), self.app.button_color).pack(fill="x", pady=2)
+        self.app.create_modern_button(primary_button_frame, "Remove", lambda: self._remove_image_template_from_listbox(self.primary_image_listbox), self.app.sleek_blue_theme['danger_color']).pack(fill="x", pady=2)
 
         # --- Fallback Action ---
-        fallback_action_frame = ttk.LabelFrame(parent_frame, text="Fallback Action (If primary target not found)", padding="10")
-        fallback_action_frame.pack(pady=5, padx=10, fill="x")
+        ttk.Label(parent_frame, text="Fallback Action (If primary target not found)", style='Heading.TLabel').pack(anchor="w", padx=10, pady=(10,0))
+        fallback_action_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        fallback_action_frame.pack(pady=5, padx=10, fill="x", ipady=5, ipadx=5)
 
         # --- Fallback Action Type ---
-        fallback_action_type_frame = ttk.Frame(fallback_action_frame)
-        ttk.Label(fallback_action_type_frame, text="Action:").pack(side="left", pady=2, padx=5)
-        ttk.Radiobutton(fallback_action_type_frame, text="Click", variable=self.fallback_action_type, value="Click", command=self.on_fallback_action_change).pack(side="left")
-        ttk.Radiobutton(fallback_action_type_frame, text="Click with Offset", variable=self.fallback_action_type, value="Click with Offset", command=self.on_fallback_action_change).pack(side="left")
-        ttk.Radiobutton(fallback_action_type_frame, text="Click and Drag", variable=self.fallback_action_type, value="Click and Drag", command=self.on_fallback_action_change).pack(side="left")
-        ttk.Radiobutton(fallback_action_type_frame, text="Do Nothing", variable=self.fallback_action_type, value="Do Nothing", command=self.on_fallback_action_change).pack(side="left")
+        fallback_action_type_frame = tk.Frame(fallback_action_frame, bg=self.app.widget_bg_color)
+        ttk.Label(fallback_action_type_frame, text="Action:", background=self.app.widget_bg_color).pack(side="left", pady=2, padx=5)
+        tk.Radiobutton(fallback_action_type_frame, text="Click", variable=self.fallback_action_type, value="Click", command=self.on_fallback_action_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(fallback_action_type_frame, text="Click with Offset", variable=self.fallback_action_type, value="Click with Offset", command=self.on_fallback_action_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(fallback_action_type_frame, text="Click and Drag", variable=self.fallback_action_type, value="Click and Drag", command=self.on_fallback_action_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(fallback_action_type_frame, text="Do Nothing", variable=self.fallback_action_type, value="Do Nothing", command=self.on_fallback_action_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
         fallback_action_type_frame.pack(fill="x")
 
         # --- Fallback Action Params ---
-        self.fallback_drag_frame = ttk.Frame(fallback_action_frame)
-        drag_x_frame = ttk.Frame(self.fallback_drag_frame)
-        ttk.Label(drag_x_frame, text="X Offset:").pack(side="left", padx=5)
+        self.fallback_drag_frame = tk.Frame(fallback_action_frame, bg=self.app.widget_bg_color)
+        drag_x_frame = tk.Frame(self.fallback_drag_frame, bg=self.app.widget_bg_color)
+        ttk.Label(drag_x_frame, text="X Offset:", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(drag_x_frame, textvariable=self.fallback_drag_offset_x, width=7).pack(side="left")
         drag_x_frame.pack(fill="x", pady=2)
-        drag_y_frame = ttk.Frame(self.fallback_drag_frame)
-        ttk.Label(drag_y_frame, text="Y Offset:").pack(side="left", padx=5)
+        drag_y_frame = tk.Frame(self.fallback_drag_frame, bg=self.app.widget_bg_color)
+        ttk.Label(drag_y_frame, text="Y Offset:", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(drag_y_frame, textvariable=self.fallback_drag_offset_y, width=7).pack(side="left")
         drag_y_frame.pack(fill="x", pady=2)
 
         # --- Fallback Target ---
-        self.fallback_target_frame = ttk.Frame(fallback_action_frame)
-        ttk.Label(self.fallback_target_frame, text="Target for Fallback Action:").pack(pady=2, anchor="w", padx=5)
+        self.fallback_target_frame = tk.Frame(fallback_action_frame, bg=self.app.widget_bg_color)
+        ttk.Label(self.fallback_target_frame, text="Target for Fallback Action:", background=self.app.widget_bg_color).pack(pady=2, anchor="w", padx=5)
 
-        fallback_list_frame = ttk.Frame(self.fallback_target_frame)
+        fallback_list_frame = tk.Frame(self.fallback_target_frame, bg=self.app.widget_bg_color)
         fallback_list_frame.pack(fill="x", expand=True)
 
-        self.fallback_image_listbox = tk.Listbox(fallback_list_frame, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, height=4, selectmode=tk.EXTENDED)
+        self.fallback_image_listbox = tk.Listbox(fallback_list_frame, bg=self.app.card_header, fg=self.app.text_color, relief=tk.FLAT, height=4, selectmode=tk.EXTENDED)
         self.fallback_image_listbox.pack(side="left", fill="x", expand=True)
 
-        fallback_button_frame = ttk.Frame(fallback_list_frame)
+        fallback_button_frame = tk.Frame(fallback_list_frame, bg=self.app.widget_bg_color)
         fallback_button_frame.pack(side="left", padx=(5,0))
-        ttk.Button(fallback_button_frame, text="Add", command=lambda: self._add_image_template_to_listbox(self.fallback_image_listbox)).pack(fill="x", pady=2)
-        ttk.Button(fallback_button_frame, text="Remove", command=lambda: self._remove_image_template_from_listbox(self.fallback_image_listbox)).pack(fill="x", pady=2)
+        self.app.create_modern_button(fallback_button_frame, "Add", lambda: self._add_image_template_to_listbox(self.fallback_image_listbox), self.app.button_color).pack(fill="x", pady=2)
+        self.app.create_modern_button(fallback_button_frame, "Remove", lambda: self._remove_image_template_from_listbox(self.fallback_image_listbox), self.app.sleek_blue_theme['danger_color']).pack(fill="x", pady=2)
 
         self.fallback_target_frame.pack(fill="x")
 
         self._update_primary_image_listbox()
         self._update_fallback_image_listbox()
         self.on_fallback_action_change()
-        self._build_wait_ui(parent_frame).pack(pady=10, padx=10, fill="x")
+        self._build_wait_ui_pack(parent_frame).pack(pady=10, padx=10, fill="x")
 
     def _update_primary_image_listbox(self):
         primary_target = self.step_data.get('primary_target', {})
@@ -596,57 +615,61 @@ class StepEditor(tk.Toplevel):
 
     def build_loop_ui(self, parent_frame):
         # --- Loop Mode ---
-        loop_mode_frame = ttk.LabelFrame(parent_frame, text="Loop Mode", padding="10")
-        loop_mode_frame.pack(pady=5, padx=10, fill="x")
-        ttk.Radiobutton(loop_mode_frame, text="Repeat X Times", variable=self.loop_mode, value="repeat", command=self.on_loop_mode_change).pack(side="left")
-        ttk.Radiobutton(loop_mode_frame, text="Until Condition Met", variable=self.loop_mode, value="until", command=self.on_loop_mode_change).pack(side="left")
+        ttk.Label(parent_frame, text="Loop Mode", style='Heading.TLabel').pack(anchor="w", padx=10)
+        loop_mode_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        loop_mode_frame.pack(pady=5, padx=10, fill="x", ipady=5, ipadx=5)
+        tk.Radiobutton(loop_mode_frame, text="Repeat X Times", variable=self.loop_mode, value="repeat", command=self.on_loop_mode_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(loop_mode_frame, text="Until Condition Met", variable=self.loop_mode, value="until", command=self.on_loop_mode_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
 
         # --- Loop Settings ---
-        self.loop_settings_frame = ttk.Frame(parent_frame)
+        self.loop_settings_frame = tk.Frame(parent_frame, bg=self.app.bg_color)
         self.loop_settings_frame.pack(pady=5, padx=10, fill="x")
 
-        self.repeat_frame = ttk.Frame(self.loop_settings_frame)
-        ttk.Label(self.repeat_frame, text="Repetitions:").pack(side="left", padx=5)
+        self.repeat_frame = tk.Frame(self.loop_settings_frame, bg=self.app.bg_color)
+        ttk.Label(self.repeat_frame, text="Repetitions:", background=self.app.bg_color).pack(side="left", padx=5)
         ttk.Entry(self.repeat_frame, textvariable=self.loop_repeat_count, width=5).pack(side="left")
 
-        self.until_frame = ttk.Frame(self.loop_settings_frame)
-        ttk.Label(self.until_frame, text="Condition (Image):").pack(anchor="w", padx=5)
+        self.until_frame = tk.Frame(self.loop_settings_frame, bg=self.app.bg_color)
+        ttk.Label(self.until_frame, text="Condition (Image):", background=self.app.bg_color).pack(anchor="w", padx=5)
 
-        until_list_frame = ttk.Frame(self.until_frame)
+        until_list_frame = tk.Frame(self.until_frame, bg=self.app.bg_color)
         until_list_frame.pack(fill="x", expand=True)
 
-        self.until_image_listbox = tk.Listbox(until_list_frame, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, height=4, selectmode=tk.EXTENDED)
+        self.until_image_listbox = tk.Listbox(until_list_frame, bg=self.app.card_header, fg=self.app.text_color, relief=tk.FLAT, height=4, selectmode=tk.EXTENDED)
         self.until_image_listbox.pack(side="left", fill="x", expand=True)
 
-        until_button_frame = ttk.Frame(until_list_frame)
+        until_button_frame = tk.Frame(until_list_frame, bg=self.app.bg_color)
         until_button_frame.pack(side="left", padx=(5,0))
-        ttk.Button(until_button_frame, text="Add", command=lambda: self._add_image_template_to_listbox(self.until_image_listbox)).pack(fill="x", pady=2)
-        ttk.Button(until_button_frame, text="Remove", command=lambda: self._remove_image_template_from_listbox(self.until_image_listbox)).pack(fill="x", pady=2)
+        self.app.create_modern_button(until_button_frame, "Add", lambda: self._add_image_template_to_listbox(self.until_image_listbox), self.app.button_color).pack(fill="x", pady=2)
+        self.app.create_modern_button(until_button_frame, "Remove", lambda: self._remove_image_template_from_listbox(self.until_image_listbox), self.app.sleek_blue_theme['danger_color']).pack(fill="x", pady=2)
 
-        max_retries_frame = ttk.Frame(self.until_frame)
+        max_retries_frame = tk.Frame(self.until_frame, bg=self.app.bg_color)
         max_retries_frame.pack(fill="x", pady=2, side="bottom")
-        ttk.Label(max_retries_frame, text="Max Retries:").pack(side="left", padx=5)
+        ttk.Label(max_retries_frame, text="Max Retries:", background=self.app.bg_color).pack(side="left", padx=5)
         ttk.Entry(max_retries_frame, textvariable=self.loop_max_retries, width=5).pack(side="left")
 
         # --- Actions Frame ---
-        actions_frame = ttk.LabelFrame(parent_frame, text="Actions to Loop", padding="10")
-        actions_frame.pack(pady=5, padx=10, fill="both", expand=True)
+        ttk.Label(parent_frame, text="Actions to Loop", style='Heading.TLabel').pack(anchor="w", padx=10, pady=(10,0))
+        actions_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        actions_frame.pack(pady=5, padx=10, fill="both", expand=True, ipady=5, ipadx=5)
 
-        list_container = ttk.Frame(actions_frame)
+        list_container = tk.Frame(actions_frame, bg=self.app.widget_bg_color)
         list_container.pack(fill="both", expand=True)
 
-        self.loop_actions_listbox = tk.Listbox(list_container, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, height=6)
+        self.loop_actions_listbox = tk.Listbox(list_container, bg=self.app.card_header, fg=self.app.text_color, relief=tk.FLAT, height=6)
         self.loop_actions_listbox.pack(side="left", fill="both", expand=True)
         self.loop_actions_listbox.bind("<<ListboxSelect>>", self.on_loop_action_select)
 
-        seq_button_frame = ttk.Frame(list_container)
+        seq_button_frame = tk.Frame(list_container, bg=self.app.widget_bg_color)
         seq_button_frame.pack(side="left", padx=(5,0), fill="y")
 
-        ttk.Button(seq_button_frame, text="Add", command=self._add_loop_action).pack(pady=2, fill="x")
-        self.edit_loop_action_button = ttk.Button(seq_button_frame, text="Edit", command=self._edit_loop_action, state=tk.DISABLED)
+        self.app.create_modern_button(seq_button_frame, "Add", self._add_loop_action, self.app.button_color).pack(pady=2, fill="x")
+        self.edit_loop_action_button = self.app.create_modern_button(seq_button_frame, "Edit", self._edit_loop_action, self.app.button_color)
         self.edit_loop_action_button.pack(pady=2, fill="x")
-        self.remove_loop_action_button = ttk.Button(seq_button_frame, text="Remove", command=self._remove_loop_action, state=tk.DISABLED)
+        self.edit_loop_action_button.config(state=tk.DISABLED)
+        self.remove_loop_action_button = self.app.create_modern_button(seq_button_frame, "Remove", self._remove_loop_action, self.app.sleek_blue_theme['danger_color'])
         self.remove_loop_action_button.pack(pady=2, fill="x")
+        self.remove_loop_action_button.config(state=tk.DISABLED)
 
         # Disable loop/conditional step types if this is a sub-editor
         if self.is_sub_editor:
@@ -661,27 +684,28 @@ class StepEditor(tk.Toplevel):
 
     def build_conditional_branch_ui(self, parent_frame):
         # --- Condition Builder ---
-        condition_frame = ttk.LabelFrame(parent_frame, text="Condition", padding="10")
-        condition_frame.pack(pady=5, padx=10, fill="x")
+        ttk.Label(parent_frame, text="Condition", style='Heading.TLabel').pack(anchor="w", padx=10)
+        condition_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        condition_frame.pack(pady=5, padx=10, fill="x", ipady=5, ipadx=5)
 
-        ttk.Label(condition_frame, text="If variable").pack(side="left", padx=5)
+        ttk.Label(condition_frame, text="If variable", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(condition_frame, textvariable=self.if_variable, width=15).pack(side="left", padx=5)
 
         operators = ["equals", "not equals", "contains", "not contains", "is greater than", "is less than"]
         ttk.OptionMenu(condition_frame, self.if_operator, *operators).pack(side="left", padx=5)
 
-        ttk.Label(condition_frame, text="value").pack(side="left", padx=5)
+        ttk.Label(condition_frame, text="value", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(condition_frame, textvariable=self.if_value, width=15).pack(side="left", padx=5)
 
         # --- Branch Frames ---
-        branch_parent_frame = ttk.Frame(parent_frame)
+        branch_parent_frame = tk.Frame(parent_frame, bg=self.app.bg_color)
         branch_parent_frame.pack(pady=5, padx=10, fill="both", expand=True)
 
         # --- IF Branch ---
-        if_frame = self._create_branch_frame(branch_parent_frame, "IF Actions (if condition is true)")
-        self.if_listbox = self._create_branch_listbox(if_frame, self.on_if_action_select)
+        if_frame, if_list_container = self._create_branch_frame(branch_parent_frame, "IF Actions (if condition is true)")
+        self.if_listbox = self._create_branch_listbox(if_list_container, self.on_if_action_select)
         self.if_edit_button, self.if_remove_button = self._create_branch_buttons(
-            if_frame,
+            if_list_container,
             self._add_if_action,
             self._edit_if_action,
             self._remove_if_action
@@ -689,10 +713,10 @@ class StepEditor(tk.Toplevel):
         if_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
 
         # --- ELSE Branch ---
-        else_frame = self._create_branch_frame(branch_parent_frame, "ELSE Actions (optional)")
-        self.else_listbox = self._create_branch_listbox(else_frame, self.on_else_action_select)
+        else_frame, else_list_container = self._create_branch_frame(branch_parent_frame, "ELSE Actions (optional)")
+        self.else_listbox = self._create_branch_listbox(else_list_container, self.on_else_action_select)
         self.else_edit_button, self.else_remove_button = self._create_branch_buttons(
-            else_frame,
+            else_list_container,
             self._add_else_action,
             self._edit_else_action,
             self._remove_else_action
@@ -704,25 +728,31 @@ class StepEditor(tk.Toplevel):
 
 
     def _create_branch_frame(self, parent, title):
-        frame = ttk.LabelFrame(parent, text=title, padding="10")
-        return frame
+        frame = tk.Frame(parent, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        ttk.Label(frame, text=title, style='Heading.TLabel', background=self.app.widget_bg_color).pack(anchor="w", padx=10, pady=(5,5))
 
-    def _create_branch_listbox(self, parent, select_callback):
-        list_container = ttk.Frame(parent)
-        list_container.pack(fill="both", expand=True)
-        listbox = tk.Listbox(list_container, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, height=8)
+        # Create the list container here and return it along with the main frame
+        list_container = tk.Frame(frame, bg=self.app.widget_bg_color)
+        list_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        return frame, list_container
+
+    def _create_branch_listbox(self, list_container, select_callback):
+        listbox = tk.Listbox(list_container, bg=self.app.card_header, fg=self.app.text_color, relief=tk.FLAT, height=8)
         listbox.pack(side="left", fill="both", expand=True)
         listbox.bind("<<ListboxSelect>>", select_callback)
         return listbox
 
-    def _create_branch_buttons(self, parent, add_cmd, edit_cmd, remove_cmd):
-        button_frame = ttk.Frame(parent.winfo_children()[0]) # Get the list_container
+    def _create_branch_buttons(self, list_container, add_cmd, edit_cmd, remove_cmd):
+        # Parent the button frame directly to the list_container
+        button_frame = tk.Frame(list_container, bg=self.app.widget_bg_color)
         button_frame.pack(side="left", padx=(5,0), fill="y")
-        ttk.Button(button_frame, text="Add", command=add_cmd).pack(pady=2, fill="x")
-        edit_button = ttk.Button(button_frame, text="Edit", command=edit_cmd, state=tk.DISABLED)
+        self.app.create_modern_button(button_frame, "Add", add_cmd, self.app.button_color).pack(pady=2, fill="x")
+        edit_button = self.app.create_modern_button(button_frame, "Edit", edit_cmd, self.app.button_color)
         edit_button.pack(pady=2, fill="x")
-        remove_button = ttk.Button(button_frame, text="Remove", command=remove_cmd, state=tk.DISABLED)
+        edit_button.config(state=tk.DISABLED)
+        remove_button = self.app.create_modern_button(button_frame, "Remove", remove_cmd, self.app.sleek_blue_theme['danger_color'])
         remove_button.pack(pady=2, fill="x")
+        remove_button.config(state=tk.DISABLED)
         return edit_button, remove_button
 
     def _add_if_action(self):
@@ -872,36 +902,40 @@ class StepEditor(tk.Toplevel):
 
     def build_time_based_condition_ui(self, parent_frame):
         # --- Time Settings ---
-        time_frame = ttk.LabelFrame(parent_frame, text="Time Condition", padding="10")
-        time_frame.pack(pady=5, padx=10, fill="x")
-        ttk.Label(time_frame, text="Hour (0-23):").pack(side="left", padx=5)
+        ttk.Label(parent_frame, text="Time Condition", style='Heading.TLabel').pack(anchor="w", padx=10)
+        time_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        time_frame.pack(pady=5, padx=10, fill="x", ipady=5, ipadx=5)
+        ttk.Label(time_frame, text="Hour (0-23):", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(time_frame, textvariable=self.time_condition_hour, width=5).pack(side="left", padx=5)
-        ttk.Label(time_frame, text="Minute (0-59):").pack(side="left", padx=5)
+        ttk.Label(time_frame, text="Minute (0-59):", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(time_frame, textvariable=self.time_condition_minute, width=5).pack(side="left", padx=5)
 
         # Add a real-time clock label
         self.current_time_label_var = tk.StringVar()
-        current_time_label = ttk.Label(time_frame, textvariable=self.current_time_label_var)
+        current_time_label = ttk.Label(time_frame, textvariable=self.current_time_label_var, background=self.app.widget_bg_color)
         current_time_label.pack(side="left", padx=20)
         self._update_clock()
 
-        actions_frame = ttk.LabelFrame(parent_frame, text="Actions to run at specified time", padding="10")
-        actions_frame.pack(pady=5, padx=10, fill="both", expand=True)
+        ttk.Label(parent_frame, text="Actions to run at specified time", style='Heading.TLabel').pack(anchor="w", padx=10, pady=(10,0))
+        actions_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        actions_frame.pack(pady=5, padx=10, fill="both", expand=True, ipady=5, ipadx=5)
 
-        list_container = ttk.Frame(actions_frame)
+        list_container = tk.Frame(actions_frame, bg=self.app.widget_bg_color)
         list_container.pack(fill="both", expand=True)
 
-        self.time_based_actions_listbox = tk.Listbox(list_container, bg=self.app.widget_bg_color, fg=self.app.text_color, relief=tk.FLAT, height=6)
+        self.time_based_actions_listbox = tk.Listbox(list_container, bg=self.app.card_header, fg=self.app.text_color, relief=tk.FLAT, height=6)
         self.time_based_actions_listbox.pack(side="left", fill="both", expand=True)
 
-        seq_button_frame = ttk.Frame(list_container)
+        seq_button_frame = tk.Frame(list_container, bg=self.app.widget_bg_color)
         seq_button_frame.pack(side="left", padx=(5,0), fill="y")
 
-        ttk.Button(seq_button_frame, text="Add", command=self._add_time_based_action).pack(pady=2, fill="x")
-        self.edit_time_based_action_button = ttk.Button(seq_button_frame, text="Edit", command=self._edit_time_based_action, state=tk.DISABLED)
+        self.app.create_modern_button(seq_button_frame, "Add", self._add_time_based_action, self.app.button_color).pack(pady=2, fill="x")
+        self.edit_time_based_action_button = self.app.create_modern_button(seq_button_frame, "Edit", self._edit_time_based_action, self.app.button_color)
         self.edit_time_based_action_button.pack(pady=2, fill="x")
-        self.remove_time_based_action_button = ttk.Button(seq_button_frame, text="Remove", command=self._remove_time_based_action, state=tk.DISABLED)
+        self.edit_time_based_action_button.config(state=tk.DISABLED)
+        self.remove_time_based_action_button = self.app.create_modern_button(seq_button_frame, "Remove", self._remove_time_based_action, self.app.sleek_blue_theme['danger_color'])
         self.remove_time_based_action_button.pack(pady=2, fill="x")
+        self.remove_time_based_action_button.config(state=tk.DISABLED)
 
         self._update_time_based_actions_listbox()
 
@@ -918,10 +952,11 @@ class StepEditor(tk.Toplevel):
 
     def build_wait_step_ui(self, parent_frame):
         """Builds the UI for the 'Wait' step type."""
-        wait_frame = ttk.LabelFrame(parent_frame, text="Wait Configuration", padding="10")
-        wait_frame.pack(pady=5, padx=10, fill="x")
+        ttk.Label(parent_frame, text="Wait Configuration", style='Heading.TLabel').pack(anchor="w", padx=10)
+        wait_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        wait_frame.pack(pady=5, padx=10, fill="x", ipady=5, ipadx=5)
 
-        ttk.Label(wait_frame, text="Duration (seconds):").pack(side="left", padx=5)
+        ttk.Label(wait_frame, text="Duration (seconds):", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(wait_frame, textvariable=self.wait_duration, width=10).pack(side="left", padx=5)
 
     def on_step_type_change(self):
@@ -936,26 +971,26 @@ class StepEditor(tk.Toplevel):
         self.wait_step_frame.grid_remove()
 
         if step_type == 'simple':
-            self.simple_action_frame.grid(row=1, column=0, sticky="ew")
+            self.simple_action_frame.grid(row=2, column=0, sticky="ew")
         elif step_type == 'loop':
-            self.loop_frame.grid(row=1, column=0, sticky="ew")
+            self.loop_frame.grid(row=2, column=0, sticky="ew")
         elif step_type == 'conditional_branch':
-            self.conditional_branch_frame.grid(row=1, column=0, sticky="ew")
+            self.conditional_branch_frame.grid(row=2, column=0, sticky="ew")
         elif step_type == 'time_based_condition':
-            self.time_based_condition_frame.grid(row=1, column=0, sticky="ew")
+            self.time_based_condition_frame.grid(row=2, column=0, sticky="ew")
         elif step_type == 'wait':
-            self.wait_step_frame.grid(row=1, column=0, sticky="ew")
+            self.wait_step_frame.grid(row=2, column=0, sticky="ew")
         else: # conditional_loop
-            self.conditional_loop_frame.grid(row=1, column=0, sticky="ew")
+            self.conditional_loop_frame.grid(row=2, column=0, sticky="ew")
 
     def on_mode_change(self):
         self.run_step_validation()
         if self.detection_mode.get() == "Color":
             self.image_frame.grid_remove()
-            self.color_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+            self.color_frame.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         else:
             self.color_frame.grid_remove()
-            self.image_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+            self.image_frame.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(0, 10))
 
     def on_action_change(self):
         self.run_step_validation()
@@ -1003,30 +1038,64 @@ class StepEditor(tk.Toplevel):
             self.fallback_drag_frame.pack_forget()
             self.fallback_target_frame.pack(fill="x")
 
-    def _build_wait_ui(self, parent_frame):
-        wait_frame = ttk.LabelFrame(parent_frame, text="Post-Action Wait", padding="10")
+    def _build_wait_ui_pack(self, parent_frame):
+        container = tk.Frame(parent_frame, bg=self.app.bg_color)
+        ttk.Label(container, text="Post-Action Wait", style='Heading.TLabel').pack(anchor="w", pady=(0, 5))
+        wait_frame = tk.Frame(container, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        wait_frame.pack(fill="x", pady=(0, 10), ipady=5, ipadx=5)
+        self._build_wait_ui_content(wait_frame)
+        return container
 
+    def _build_wait_ui_grid(self, parent_frame, row):
+        ttk.Label(parent_frame, text="Post-Action Wait", style='Heading.TLabel').grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        wait_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        wait_frame.grid(row=row + 1, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
+        self._build_wait_ui_content(wait_frame)
+
+    def _build_wait_ui_content(self, wait_frame):
         # --- Wait Type ---
-        wait_type_frame = ttk.Frame(wait_frame)
-        ttk.Radiobutton(wait_type_frame, text="None", variable=self.wait_type, value="None", command=self.on_wait_type_change).pack(side="left")
-        ttk.Radiobutton(wait_type_frame, text="Fixed", variable=self.wait_type, value="Fixed", command=self.on_wait_type_change).pack(side="left")
-        ttk.Radiobutton(wait_type_frame, text="Random", variable=self.wait_type, value="Random", command=self.on_wait_type_change).pack(side="left")
+        wait_type_frame = tk.Frame(wait_frame, bg=self.app.widget_bg_color)
+        tk.Radiobutton(wait_type_frame, text="None", variable=self.wait_type, value="None", command=self.on_wait_type_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(wait_type_frame, text="Fixed", variable=self.wait_type, value="Fixed", command=self.on_wait_type_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(wait_type_frame, text="Random", variable=self.wait_type, value="Random", command=self.on_wait_type_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
         wait_type_frame.pack(fill="x", pady=(0,5))
 
         # --- Fixed Wait Frame ---
-        self.fixed_wait_frame = ttk.Frame(wait_frame)
-        ttk.Label(self.fixed_wait_frame, text="Wait (sec):").pack(side="left", padx=5)
+        self.fixed_wait_frame = tk.Frame(wait_frame, bg=self.app.widget_bg_color)
+        ttk.Label(self.fixed_wait_frame, text="Wait (sec):", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(self.fixed_wait_frame, textvariable=self.fixed_wait, width=7).pack(side="left")
 
         # --- Random Wait Frame ---
-        self.random_wait_frame = ttk.Frame(wait_frame)
-        ttk.Label(self.random_wait_frame, text="Min (sec):").pack(side="left", padx=5)
+        self.random_wait_frame = tk.Frame(wait_frame, bg=self.app.widget_bg_color)
+        ttk.Label(self.random_wait_frame, text="Min (sec):", background=self.app.widget_bg_color).pack(side="left", padx=5)
         ttk.Entry(self.random_wait_frame, textvariable=self.min_wait, width=7).pack(side="left")
-        ttk.Label(self.random_wait_frame, text="Max (sec):").pack(side="left", padx=(10,5))
+        ttk.Label(self.random_wait_frame, text="Max (sec):", background=self.app.widget_bg_color).pack(side="left", padx=(10,5))
         ttk.Entry(self.random_wait_frame, textvariable=self.max_wait, width=7).pack(side="left")
 
         self.on_wait_type_change() # Set initial visibility
-        return wait_frame
+
+    def _build_on_failure_ui_grid(self, parent_frame, row):
+        ttk.Label(parent_frame, text="On Failure", style='Heading.TLabel').grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        on_failure_frame = tk.Frame(parent_frame, bg=self.app.widget_bg_color, bd=1, relief='solid')
+        on_failure_frame.grid(row=row + 1, column=0, columnspan=2, sticky="ew", pady=(0, 10), ipady=5, ipadx=5)
+        self._build_on_failure_ui_content(on_failure_frame)
+
+    def _build_on_failure_ui_content(self, on_failure_frame):
+        # --- Policy ---
+        policy_frame = tk.Frame(on_failure_frame, bg=self.app.widget_bg_color)
+        ttk.Label(policy_frame, text="Action on Failure:", background=self.app.widget_bg_color).pack(side="left", padx=(0,10))
+        tk.Radiobutton(policy_frame, text="Stop Bot", variable=self.on_failure_policy, value="Stop", command=self.on_failure_policy_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(policy_frame, text="Skip Step", variable=self.on_failure_policy, value="Skip", command=self.on_failure_policy_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        tk.Radiobutton(policy_frame, text="Retry Step", variable=self.on_failure_policy, value="Retry", command=self.on_failure_policy_change, bg=self.app.widget_bg_color, fg=self.app.text_color, selectcolor=self.app.card_header, activebackground=self.app.widget_bg_color, activeforeground=self.app.text_color, relief='flat', highlightthickness=0).pack(side="left")
+        policy_frame.pack(fill="x", pady=(0,5))
+
+        # --- Retries Frame ---
+        self.retries_frame = tk.Frame(on_failure_frame, bg=self.app.widget_bg_color)
+        ttk.Label(self.retries_frame, text="Number of Retries:", background=self.app.widget_bg_color).pack(side="left", padx=5)
+        self.retries_entry = ttk.Entry(self.retries_frame, textvariable=self.on_failure_retries, width=7)
+        self.retries_entry.pack(side="left")
+
+        self.on_failure_policy_change() # Set initial visibility
 
     def on_wait_type_change(self):
         wait_type = self.wait_type.get()
