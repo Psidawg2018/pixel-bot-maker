@@ -1,16 +1,20 @@
 import tkinter as tk
+import logging
 
 class PreviewOverlay(tk.Toplevel):
     """Overlay window that shows preview steps on actual screen"""
     def __init__(self, parent, sequence):
         super().__init__(parent)
+        logging.info("Initializing Live Preview Overlay...")
         self.parent = parent
         self.sequence = sequence
 
         self.setup_overlay()
         # Use the preview engine to get visual info
         self.preview_engine = self.parent.preview_engine
+        logging.info(f"Live Preview: Received sequence with {len(self.sequence)} steps.")
         self.preview_results = self.preview_engine.preview_sequence(self.sequence)
+        logging.info(f"Live Preview: Generated {len(self.preview_results)} preview results.")
 
         self.run_live_preview()
 
@@ -35,13 +39,16 @@ class PreviewOverlay(tk.Toplevel):
         self.bind("<Escape>", lambda e: self.destroy())
 
     def run_live_preview(self):
+        logging.info("Live Preview: Starting sequence.")
         self.after(500, self._preview_step, 0)
 
     def _preview_step(self, index):
         if index >= len(self.preview_results):
+            logging.info("Live Preview: End of sequence. Closing overlay.")
             self.destroy()
             return
 
+        logging.info(f"Live Preview: Displaying step {index + 1}.")
         self.canvas.delete("preview_element") # Clear only the previous preview drawing
 
         result = self.preview_results[index]
