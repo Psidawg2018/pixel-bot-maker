@@ -75,41 +75,37 @@ class App(tk.Tk):
 
         # --- Main Layout Frames ---
         main_frame = tk.Frame(self, bg=self.bg_color)
-        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
 
-        self.create_modern_header(main_frame)
+        # App title
+        title_label = tk.Label(main_frame, text="🤖 Pixel Bot",
+                              bg=self.bg_color, fg=self.accent_color,
+                              font=('Segoe UI', 20, 'bold'))
+        title_label.pack(pady=5)
 
-        # --- Scrollable Content Area ---
-        canvas_container = tk.Frame(main_frame, bg=self.bg_color)
-        canvas_container.pack(fill='both', expand=True, pady=(20, 0))
+        # Create a notebook for tabs
+        self.notebook = ttk.Notebook(main_frame)
+        self.notebook.pack(fill='both', expand=True, pady=5)
 
-        canvas = tk.Canvas(canvas_container, bg=self.bg_color, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(canvas_container, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg=self.bg_color)
+        # Create frames for each tab
+        self.main_tab = tk.Frame(self.notebook, bg=self.bg_color)
+        self.templates_tab = tk.Frame(self.notebook, bg=self.bg_color)
+        self.settings_tab = tk.Frame(self.notebook, bg=self.bg_color)
 
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(
-                scrollregion=canvas.bbox("all")
-            )
-        )
+        self.main_tab.pack(fill='both', expand=True)
+        self.templates_tab.pack(fill='both', expand=True)
+        self.settings_tab.pack(fill='both', expand=True)
 
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
+        self.notebook.add(self.main_tab, text='Main')
+        self.notebook.add(self.templates_tab, text='Templates')
+        self.notebook.add(self.settings_tab, text='Settings')
 
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        # Define layout for the main tab
+        left_frame = tk.Frame(self.main_tab, bg=self.bg_color)
+        left_frame.pack(side='left', fill='both', expand=True, padx=(10, 5), pady=10)
 
-        self.canvas = canvas # Save reference for scrolling
-
-        # The old content_frame is now the scrollable_frame
-        content_frame = scrollable_frame
-
-        left_frame = tk.Frame(content_frame, bg=self.bg_color)
-        left_frame.pack(side='left', fill='both', expand=True, padx=(0, 10))
-
-        right_frame = tk.Frame(content_frame, bg=self.bg_color)
-        right_frame.pack(side='right', fill='both', expand=True, padx=(10, 0))
+        right_frame = tk.Frame(self.main_tab, bg=self.bg_color)
+        right_frame.pack(side='right', fill='both', expand=True, padx=(5, 10), pady=10)
 
         # --- WIDGET CREATION (Right Panel) ---
         log_content = self.create_modern_card(right_frame, "📝 Log")
@@ -137,17 +133,7 @@ class App(tk.Tk):
         self._apply_custom_styles()
 
 
-        # The notebook is removed. Content will be placed directly in left_frame or right_frame.
-        # We create temporary frames to hold the content of the old tabs.
-        # This content will be moved into cards in the next phase.
-        templates_tab_content = tk.Frame(self) # Dummy parent for now
-        settings_tab_content = tk.Frame(self) # Dummy parent for now
-
-
-        # --- Main Tab Content (will be moved to cards) ---
         # The content that was in main_tab will now be parented to left_frame or right_frame.
-        # --- Templates Tab Content ---
-        self.setup_templates_tab(templates_tab_content)
 
         # --- Action Sequence Panel (Left Frame) ---
         sequence_content = self.create_modern_card(left_frame, "⚡ Action Sequence")
@@ -281,15 +267,11 @@ class App(tk.Tk):
         self.most_loaded_container = tk.Frame(most_loaded_content, bg=self.widget_bg_color)
         self.most_loaded_container.pack(fill="x", expand=True, pady=5, padx=15)
 
-        # --- Templates Card (Right Frame) ---
-        self.templates_card_content = self.create_modern_card(right_frame, "📚 Templates")
-        self.setup_templates_tab(self.templates_card_content)
+        # --- Populate Templates Tab ---
+        self.setup_templates_tab(self.templates_tab)
 
-        # --- Settings Card (Right Frame) ---
-        self.settings_card_content = self.create_modern_card(right_frame, "⚙️ Settings")
-
-        # The various settings are now created in sub-frames parented to the card's content area
-        settings_inner_frame = tk.Frame(self.settings_card_content, bg=self.widget_bg_color)
+        # --- Populate Settings Tab ---
+        settings_inner_frame = tk.Frame(self.settings_tab, bg=self.widget_bg_color)
         settings_inner_frame.pack(fill='both', expand=True, padx=15, pady=10)
 
         # --- General Settings ---
@@ -416,60 +398,6 @@ class App(tk.Tk):
             '#ff4757': '#e63946'   # Red
         }
         return color_map.get(color, color)
-
-    def scroll_to_widget(self, widget):
-        self.canvas.update_idletasks()
-
-        scroll_region_str = self.canvas.cget("scrollregion")
-        if not scroll_region_str: return
-
-        try:
-            scrollable_height = float(scroll_region_str.split(' ')[3])
-        except (ValueError, IndexError):
-            return # Invalid scrollregion format
-
-        if scrollable_height <= 0: return
-
-        # Y position of the top of the canvas viewport, relative to the root window
-        canvas_root_y = self.canvas.winfo_rooty()
-
-        # Y position of the top of the widget, relative to the root window
-        widget_root_y = widget.winfo_rooty()
-
-        # The widget's y-position relative to the canvas's top edge
-        y_in_canvas = widget_root_y - canvas_root_y
-
-        # The current scroll position (a tuple of fractions, e.g., (0.0, 0.5))
-        current_scroll_fraction = self.canvas.yview()
-
-        # The y-offset of the scrolled content
-        scrolled_y_offset = current_scroll_fraction[0] * scrollable_height
-
-        # The widget's "true" y-position within the entire scrollable content
-        absolute_y = y_in_canvas + scrolled_y_offset
-
-        # The fraction to scroll to, ensuring it's not more than 1.0
-        fraction = min(absolute_y / scrollable_height, 1.0)
-
-        self.canvas.yview_moveto(fraction)
-
-    def create_modern_header(self, parent):
-        header_frame = tk.Frame(parent, bg=self.bg_color, height=60)
-        header_frame.pack(fill='x', pady=(0, 20))
-        header_frame.pack_propagate(False)
-
-        # App title with emoji
-        title_label = tk.Label(header_frame, text="🤖 Pixel Bot",
-                              bg=self.bg_color, fg=self.accent_color,
-                              font=('Segoe UI', 20, 'bold'))
-        title_label.pack(side='left', pady=15, padx=20)
-
-        # Navigation buttons
-        nav_frame = tk.Frame(header_frame, bg=self.bg_color)
-        nav_frame.pack(side='right', pady=15, padx=20)
-
-        self.create_modern_button(nav_frame, 'Templates', lambda: self.scroll_to_widget(self.templates_card_content), self.widget_bg_color).pack(side='left', padx=10)
-        self.create_modern_button(nav_frame, 'Settings', lambda: self.scroll_to_widget(self.settings_card_content), self.widget_bg_color).pack(side='left')
 
     def on_closing(self):
         logging.info("Closing application and stopping listener...")
