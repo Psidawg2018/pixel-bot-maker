@@ -78,6 +78,12 @@ class ExecutionEngine:
             step_type = current_step.get('step_type', 'simple')
             step_number_str = f"Step {current_index + 1}" # For logging
 
+            if self.app.dry_run_var.get():
+                # Use the preview engine to check for issues even in dry run
+                preview_result = self.app.preview_engine.preview_step(current_step, current_index + 1)
+                if preview_result['potential_issues']:
+                    logging.warning(f"[DRY RUN] {step_number_str}: Potential issues found: {', '.join(preview_result['potential_issues'])}")
+
             # For other actions, we pass the step and its context
             step_context = {'sequence': current_sequence, 'index': current_index, 'number_str': step_number_str}
 

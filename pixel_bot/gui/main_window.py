@@ -9,6 +9,7 @@ import copy
 from pynput import keyboard
 
 from ..core.execution_engine import ExecutionEngine
+from ..core.preview_engine import ScriptPreviewEngine
 from ..core.variable_manager import VariableManager
 from ..core.template_manager import TemplateManager
 from ..utils.logger import setup_logging
@@ -17,6 +18,8 @@ from ..utils.settings_manager import SettingsManager
 from .dialogs import HotkeyChangeDialog
 from .step_editor import StepEditor
 from .window_selector import WindowSelector
+from .preview_dialog import PreviewDialog
+from .preview_overlay import PreviewOverlay
 from tkinter import messagebox
 
 
@@ -119,6 +122,7 @@ class App(tk.Tk):
         # --- Core Logic ---
         self.variable_manager = VariableManager(self.variables, logging.info)
         self.execution_engine = ExecutionEngine(self)
+        self.preview_engine = ScriptPreviewEngine(self)
         self.template_manager = TemplateManager()
         self.template_manager.load_templates()
 
@@ -152,7 +156,13 @@ class App(tk.Tk):
         file_io_frame = tk.Frame(sequence_content, bg=self.widget_bg_color)
         file_io_frame.pack(fill="x", pady=5, padx=10)
         self.create_modern_button(file_io_frame, "Load Sequence", self.load_sequence, self.button_color).pack(side="left", padx=(0,5))
-        self.create_modern_button(file_io_frame, "Save Sequence", self.save_sequence, self.button_color).pack(side="left")
+        self.create_modern_button(file_io_frame, "Save Sequence", self.save_sequence, self.button_color).pack(side="left", padx=(0,5))
+        preview_btn = self.create_modern_button(
+            file_io_frame, "👁️ Preview Sequence",
+            self.show_preview_dialog,
+            self.button_color
+        )
+        preview_btn.pack(side="left")
 
         list_container = tk.Frame(sequence_content, bg=self.widget_bg_color)
         list_container.pack(fill='both', expand=True, padx=10, pady=(0, 10))
@@ -224,8 +234,14 @@ class App(tk.Tk):
                                relief='flat', highlightthickness=0)
         self.dry_run_check.pack(anchor='w', padx=15, pady=5)
 
-        self.start_button = self.create_modern_button(controls_content, "▶️ Start Bot", self.toggle_bot, self.sleek_blue_theme['accent_color'])
-        self.start_button.pack(pady=10, ipady=5, ipadx=10)
+        bot_button_frame = tk.Frame(controls_content, bg=self.widget_bg_color)
+        bot_button_frame.pack(pady=10)
+
+        self.start_button = self.create_modern_button(bot_button_frame, "▶️ Start Bot", self.toggle_bot, self.sleek_blue_theme['accent_color'])
+        self.start_button.pack(side="left", ipady=5, ipadx=10, padx=(0, 5))
+
+        self.live_preview_button = self.create_modern_button(bot_button_frame, "▶️ Live Preview", self.start_live_preview, self.button_color)
+        self.live_preview_button.pack(side="left", ipady=5, ipadx=10, padx=(5, 0))
 
 
         # --- Global Target Panel (Right Frame) ---
@@ -428,6 +444,22 @@ class App(tk.Tk):
         if self.hotkey_listener:
             self.hotkey_listener.stop()
         self.destroy()
+
+    def show_preview_dialog(self):
+        """Open the script preview dialog"""
+        if not self.action_sequence:
+            messagebox.showinfo("No Sequence", "Please add some steps to preview.")
+            return
+
+        PreviewDialog(self, self.action_sequence)
+
+    def start_live_preview(self):
+        """Start live preview mode - shows what bot would do in real-time"""
+        if not self.action_sequence:
+            messagebox.showinfo("No Sequence", "Please add some steps for a live preview.")
+            return
+
+        PreviewOverlay(self, self.action_sequence)
 
     def _configure_theme(self):
         theme = self.settings_manager.get_setting('theme')
