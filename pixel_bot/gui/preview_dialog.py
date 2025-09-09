@@ -49,8 +49,8 @@ class PreviewDialog(tk.Toplevel):
     def create_preview_content(self, parent):
         """Create the main preview visualization area"""
         # Left Panel - Timeline
-        left_panel = self.parent.create_modern_card(parent, "📋 Execution Timeline")
-        left_panel.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
+        left_card, left_panel = self.parent.create_modern_card(parent, "📋 Execution Timeline")
+        left_card.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
 
         # Use a Treeview for the timeline
         self.timeline_tree = ttk.Treeview(left_panel,
@@ -74,8 +74,8 @@ class PreviewDialog(tk.Toplevel):
         self.timeline_tree.bind("<<TreeviewSelect>>", self.show_step_details)
 
         # Right Panel - Details
-        right_panel = self.parent.create_modern_card(parent, "🔍 Step Details")
-        right_panel.grid(row=1, column=1, sticky="nsew", padx=(10, 0))
+        right_card, right_panel = self.parent.create_modern_card(parent, "🔍 Step Details")
+        right_card.grid(row=1, column=1, sticky="nsew", padx=(10, 0))
 
         self.details_text = tk.Text(right_panel,
                                     bg=self.parent.widget_bg_color,

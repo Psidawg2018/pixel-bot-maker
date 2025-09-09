@@ -108,7 +108,8 @@ class App(tk.Tk):
         right_frame.pack(side='right', fill='both', expand=True, padx=(5, 10), pady=10)
 
         # --- WIDGET CREATION (Right Panel) ---
-        log_content = self.create_modern_card(right_frame, "📝 Log")
+        log_card, log_content = self.create_modern_card(right_frame, "📝 Log")
+        log_card.pack(fill='both', expand=True, pady=(0, 10))
         self.log_area = scrolledtext.ScrolledText(log_content, width=45, height=10, relief=tk.FLAT, insertbackground=self.text_color, bg=self.widget_bg_color, fg=self.text_color, bd=0, font=self.font_manager.fonts['mono'])
         self.log_area.pack(fill='both', expand=True, padx=1, pady=1)
 
@@ -136,7 +137,8 @@ class App(tk.Tk):
         # The content that was in main_tab will now be parented to left_frame or right_frame.
 
         # --- Action Sequence Panel (Left Frame) ---
-        sequence_content = self.create_modern_card(left_frame, "⚡ Action Sequence")
+        sequence_card, sequence_content = self.create_modern_card(left_frame, "⚡ Action Sequence")
+        sequence_card.pack(fill='both', expand=True, pady=(0, 10))
 
         # Frame for Save/Load buttons
         file_io_frame = tk.Frame(sequence_content, bg=self.widget_bg_color)
@@ -198,7 +200,8 @@ class App(tk.Tk):
         self.remove_step_button.config(state=tk.DISABLED)
 
         # --- Bot Controls Panel (Left Frame) ---
-        controls_content = self.create_modern_card(left_frame, "🎮 Bot Controls")
+        controls_card, controls_content = self.create_modern_card(left_frame, "🎮 Bot Controls")
+        controls_card.pack(fill='x', pady=(10, 0))
 
         self.hide_window_check = tk.Checkbutton(controls_content, text="Hide window when bot is running",
                                 variable=self.hide_window_var,
@@ -231,13 +234,15 @@ class App(tk.Tk):
 
 
         # --- Global Target Panel (Right Frame) ---
-        target_content = self.create_modern_card(right_frame, "🎯 Global Target")
+        target_card, target_content = self.create_modern_card(right_frame, "🎯 Global Target")
+        target_card.pack(fill='x', pady=(0, 10))
         self.target_window_label = ttk.Label(target_content, textvariable=self.target_window_title, wraplength=380, justify="left", style="Card.TLabel")
         self.target_window_label.pack(pady=5, fill="x", expand=True, ipady=5, padx=15)
         self.create_modern_button(target_content, "🔄 Change Target Window", self.prompt_for_window_selection, self.button_color).pack(pady=(10,5))
 
         # --- Validation Panel (Right Frame) ---
-        validation_content = self.create_modern_card(right_frame, "✅ Validation Results")
+        validation_card, validation_content = self.create_modern_card(right_frame, "✅ Validation Results")
+        validation_card.pack(fill='x', pady=(0, 10))
 
         tree_container = tk.Frame(validation_content, bg=self.widget_bg_color)
         tree_container.pack(fill='both', expand=True, padx=15, pady=(10,0))
@@ -263,7 +268,8 @@ class App(tk.Tk):
         self.create_modern_button(validation_content, "🔍 Validate Sequence", self.run_full_validation, self.sleek_blue_theme['warning_color']).pack(pady=10)
 
         # --- Most Loaded Sequences (Left Frame) ---
-        most_loaded_content = self.create_modern_card(left_frame, "⭐ Frequently Used")
+        most_loaded_card, most_loaded_content = self.create_modern_card(left_frame, "⭐ Frequently Used")
+        most_loaded_card.pack(fill='x', pady=(10, 0))
         self.most_loaded_container = tk.Frame(most_loaded_content, bg=self.widget_bg_color)
         self.most_loaded_container.pack(fill="x", expand=True, pady=5, padx=15)
 
@@ -351,10 +357,12 @@ class App(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def create_modern_card(self, parent, title, height=None):
-        """Create a modern card-style container matching the mockup"""
+        """Create a modern card-style container matching the mockup.
+
+        Returns a tuple: (card_frame, content_frame)
+        The caller is responsible for packing/gridding the card_frame.
+        """
         card = tk.Frame(parent, bg=self.widget_bg_color, relief='flat', bd=0)
-        # Use fill='x' and expand=False (default) to allow vertical stacking
-        card.pack(fill='x', pady=(0, 15))
 
         # Add subtle border effect
         border_frame = tk.Frame(card, bg=self.border_color, height=1)
@@ -377,7 +385,7 @@ class App(tk.Tk):
             content_frame.pack_propagate(False)
         content_frame.pack(fill='both', expand=True, padx=1, pady=(0, 1))
 
-        return content_frame
+        return (card, content_frame)
 
     def create_modern_button(self, parent, text, command, bg_color, width=None):
         """Create a modern styled button matching the mockup"""
