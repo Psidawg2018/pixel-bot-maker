@@ -371,7 +371,8 @@ class App(tk.Tk):
     def create_modern_card(self, parent, title, height=None):
         """Create a modern card-style container matching the mockup"""
         card = tk.Frame(parent, bg=self.widget_bg_color, relief='flat', bd=0)
-        card.pack(fill='both', expand=True, pady=(0, 15))
+        # Use fill='x' and expand=False (default) to allow vertical stacking
+        card.pack(fill='x', pady=(0, 15))
 
         # Add subtle border effect
         border_frame = tk.Frame(card, bg=self.border_color, height=1)
